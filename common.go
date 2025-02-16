@@ -2,15 +2,17 @@ package priority_channels
 
 import (
 	"context"
-	"reflect"
-	"sync/atomic"
 	"time"
+
+	"github.com/dmgrit/priority-channels/channels"
 )
 
 type PriorityChannel[T any] interface {
 	Receive() (msg T, channelName string, ok bool)
 	ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus)
 	ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus)
+	AsSelectableChannelWithPriority(name string, priority int) channels.ChannelWithPriority[T]
+	AsSelectableChannelWithFreqRatio(name string, freqRatio int) channels.ChannelWithFreqRatio[T]
 }
 
 type PriorityChannelWithContext[T any] interface {
@@ -60,16 +62,6 @@ func ChannelWaitInterval(d time.Duration) func(opt *PriorityChannelOptions) {
 	}
 }
 
-type ChannelWithUnderlyingClosedChannelDetails interface {
-	// An empty channel name indicates that the current channel is closed.
-	// A non-empty channel name indicates that some underlying descendant channel is closed.
-	GetUnderlyingClosedChannelDetails() (channelName string, closeStatus ReceiveStatus)
-}
-
-type ReadinessChecker interface {
-	IsReady() bool
-}
-
 func ProcessPriorityChannelMessages[T any](
 	msgReceiver PriorityChannel[T],
 	msgProcessor func(ctx context.Context, msg T, channelName string)) ExitReason {
@@ -93,88 +85,4 @@ func ProcessPriorityChannelMessages[T any](
 func getZero[T any]() T {
 	var result T
 	return result
-}
-
-func selectCasesOfNextIteration(
-	priorityChannelContext context.Context,
-	currRequestContext context.Context,
-	fnPrepareChannelsSelectCases func(currIterationIndex int) []reflect.SelectCase,
-	currIterationIndex int,
-	lastIterationIndex int,
-	withDefaultCase bool,
-	isPreparing *atomic.Bool,
-	channelReceiveWaitInterval *time.Duration) (chosen int, recv reflect.Value, recvOk bool, status ReceiveStatus) {
-
-	isLastIteration := currIterationIndex == lastIterationIndex
-	channelsSelectCases := fnPrepareChannelsSelectCases(currIterationIndex)
-
-	selectCases := make([]reflect.SelectCase, 0, len(channelsSelectCases)+3)
-	selectCases = append(selectCases, reflect.SelectCase{
-		Dir:  reflect.SelectRecv,
-		Chan: reflect.ValueOf(priorityChannelContext.Done()),
-	})
-	selectCases = append(selectCases, reflect.SelectCase{
-		Dir:  reflect.SelectRecv,
-		Chan: reflect.ValueOf(currRequestContext.Done()),
-	})
-	selectCases = append(selectCases, channelsSelectCases...)
-	if !isLastIteration || withDefaultCase || isPreparing.Load() {
-		selectCases = append(selectCases, getDefaultSelectCaseWithWaitInterval(channelReceiveWaitInterval))
-	}
-
-	chosen, recv, recvOk = reflect.Select(selectCases)
-	switch chosen {
-	case 0:
-		// context of the priority channel is done
-		return chosen, recv, recvOk, ReceivePriorityChannelCancelled
-	case 1:
-		// context of the specific request is done
-		return chosen, recv, recvOk, ReceiveContextCancelled
-
-	case len(selectCases) - 1:
-		if !isLastIteration {
-			// Default case - go to next iteration to increase the range of allowed minimal priority channels
-			// on last iteration - blocking wait on all receive channels without default case
-			return chosen, recv, recvOk, ReceiveStatusUnknown
-		} else if withDefaultCase {
-			return chosen, recv, recvOk, ReceiveDefaultCase
-		} else if isPreparing.Load() {
-			isPreparing.Store(false)
-			// recursive call for last iteration - this time will issue a blocking wait on all channels
-			return selectCasesOfNextIteration(priorityChannelContext, currRequestContext,
-				fnPrepareChannelsSelectCases, currIterationIndex, lastIterationIndex,
-				withDefaultCase, isPreparing, channelReceiveWaitInterval)
-		}
-	}
-	return chosen, recv, recvOk, ReceiveSuccess
-}
-
-func getDefaultSelectCaseWithWaitInterval(channelReceiveWaitInterval *time.Duration) reflect.SelectCase {
-	waitInterval := defaultChannelReceiveWaitInterval
-	if channelReceiveWaitInterval != nil {
-		waitInterval = *channelReceiveWaitInterval
-	}
-	if waitInterval > 0 {
-		return reflect.SelectCase{
-			// The default behavior without a wait interval may not work
-			// if receiving a message from the channel takes some time.
-			// In such cases, a short wait is needed to ensure that the default case
-			// is not triggered while messages are still available in the channel.
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(time.After(waitInterval)),
-		}
-	}
-	return reflect.SelectCase{Dir: reflect.SelectDefault}
-}
-
-func waitForReadyStatus(ch interface{}) {
-	if ch == nil {
-		return
-	}
-	if checker, ok := ch.(ReadinessChecker); ok {
-		for !checker.IsReady() {
-			time.Sleep(100 * time.Microsecond)
-		}
-	}
-	return
 }

@@ -4,14 +4,8 @@ import (
 	"errors"
 )
 
-type Channel[T any] interface {
-	ChannelName() string
-	MsgsC() <-chan T
-	Validate() error
-}
-
 type ChannelWithPriority[T any] interface {
-	Channel[T]
+	SelectableChannel[T]
 	Priority() int
 }
 
@@ -25,9 +19,16 @@ func (c *channelWithPriority[T]) ChannelName() string {
 	return c.channelName
 }
 
-func (c *channelWithPriority[T]) MsgsC() <-chan T {
-	return c.msgsC
+func (c *channelWithPriority[T]) NextSelectCases(upto int) ([]SelectCase[T], bool, *ClosedChannelDetails) {
+	return []SelectCase[T]{
+		{
+			ChannelName: c.channelName,
+			MsgsC:       c.msgsC,
+		},
+	}, true, nil
 }
+
+func (c *channelWithPriority[T]) UpdateOnCaseSelected(pathInTree []ChannelNode) {}
 
 func (c *channelWithPriority[T]) Priority() int {
 	return c.priority

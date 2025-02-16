@@ -3,6 +3,7 @@ package priority_channel_groups_test
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -212,19 +213,23 @@ func TestProcessMessagesScenario(t *testing.T) {
 	freqRatio1Channel := make(chan string)
 
 	// sending messages to individual channels
+	var sg sync.WaitGroup
+	sg.Add(2)
 	go func() {
 		for i := 1; i <= 100; i++ {
 			allChannels[len(allChannels)-1] <- fmt.Sprintf("Freq-Ratio-9 - lowest priority message %d", i)
 		}
+		sg.Done()
 	}()
 	go func() {
 		for i := 1; i <= 100; i++ {
 			freqRatio1Channel <- fmt.Sprintf("Freq-Ratio-1 - message %d", i)
 		}
+		sg.Done()
 	}()
 
 	go func() {
-		time.Sleep(5 * time.Second)
+		sg.Wait()
 		cancel()
 	}()
 
@@ -250,7 +255,6 @@ func TestProcessMessagesScenario(t *testing.T) {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 
-	time.Sleep(1 * time.Millisecond)
 	results := make([]string, 0, 200)
 	for {
 		message, channelName, ok := ch.Receive()
@@ -259,7 +263,6 @@ func TestProcessMessagesScenario(t *testing.T) {
 		}
 		fmt.Printf("%s\n", message)
 		results = append(results, channelName)
-		time.Sleep(100 * time.Microsecond)
 	}
 	if len(results) != 200 {
 		t.Fatalf("Expected 200 results, but got %d", len(results))
@@ -450,7 +453,7 @@ func TestFreqRatioChannelGroupsValidation(t *testing.T) {
 
 			priorityChannels := make([]priority_channel_groups.PriorityChannelWithFreqRatio[string], 0, len(tc.ChannelsWithFreqRatios))
 			for _, ch := range tc.ChannelsWithFreqRatios {
-				pch, err := priority_channels.WrapAsPriorityChannel(ctx, "******", ch.MsgsC())
+				pch, err := priority_channels.WrapAsPriorityChannel(ctx, "******", make(chan string)) //ch.MsgsC())
 				if err != nil {
 					t.Fatalf("Unexpected error on wrapping as priority channel: %v", err)
 				}

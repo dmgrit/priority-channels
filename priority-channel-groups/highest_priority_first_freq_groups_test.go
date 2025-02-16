@@ -222,9 +222,9 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_MessagesInOneOfThe
 		{Body: "Priority-3 Msg-5 - Simulate long processing"},
 		{Body: "Priority-3 Msg-6"},
 		{Body: "Priority-3 Msg-7"},
-		{Body: "Priority-1 Msg-1"},
 		{Body: "Priority-2 Msg-1"},
 		{Body: "Priority-2 Msg-2"},
+		{Body: "Priority-1 Msg-1"},
 		{Body: "Priority-2 Msg-3"},
 		{Body: "Priority-2 Msg-4"},
 		{Body: "Priority-1 Msg-2"},
@@ -834,7 +834,7 @@ func TestHighestAlwaysFirstPriorityChannelValidation(t *testing.T) {
 
 			priorityChannels := make([]priority_channel_groups.PriorityChannelWithPriority[string], 0, len(tc.ChannelsWithPriorities))
 			for _, ch := range tc.ChannelsWithPriorities {
-				pch, err := priority_channels.WrapAsPriorityChannel(ctx, "******", ch.MsgsC())
+				pch, err := priority_channels.WrapAsPriorityChannel(ctx, "******", make(chan string)) //ch.MsgsC())
 				if err != nil {
 					t.Fatalf("Unexpected error on wrapping as priority channel: %v", err)
 				}

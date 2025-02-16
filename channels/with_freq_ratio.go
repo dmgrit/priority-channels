@@ -5,7 +5,7 @@ import (
 )
 
 type ChannelWithFreqRatio[T any] interface {
-	Channel[T]
+	SelectableChannel[T]
 	FreqRatio() int
 }
 
@@ -19,9 +19,16 @@ func (c *channelWithFreqRatio[T]) ChannelName() string {
 	return c.channelName
 }
 
-func (c *channelWithFreqRatio[T]) MsgsC() <-chan T {
-	return c.msgsC
+func (c *channelWithFreqRatio[T]) NextSelectCases(upto int) ([]SelectCase[T], bool, *ClosedChannelDetails) {
+	return []SelectCase[T]{
+		{
+			ChannelName: c.channelName,
+			MsgsC:       c.msgsC,
+		},
+	}, true, nil
 }
+
+func (c *channelWithFreqRatio[T]) UpdateOnCaseSelected(pathInTree []ChannelNode) {}
 
 func (c *channelWithFreqRatio[T]) FreqRatio() int {
 	return c.freqRatio

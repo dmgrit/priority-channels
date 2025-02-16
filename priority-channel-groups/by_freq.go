@@ -11,12 +11,8 @@ import (
 func CombineByFrequencyRatio[T any](ctx context.Context,
 	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T],
 	options ...func(*priority_channels.PriorityChannelOptions)) (priority_channels.PriorityChannel[T], error) {
-	channels := newPriorityChannelsGroupByFreqRatio[T](ctx, priorityChannelsWithFreqRatio)
-	priorityChannel, err := priority_channels.NewByFrequencyRatio[msgWithChannelName[T]](ctx, channels, options...)
-	if err != nil {
-		return nil, err
-	}
-	return &priorityChannelOfMsgsWithChannelName[T]{priorityChannel: priorityChannel}, nil
+	channels := newPriorityChannelsGroupByFreqRatio[T](priorityChannelsWithFreqRatio)
+	return priority_channels.NewByFrequencyRatio[T](ctx, channels, options...)
 }
 
 type PriorityChannelWithFreqRatio[T any] interface {
@@ -52,67 +48,14 @@ func NewPriorityChannelWithFreqRatio[T any](name string, priorityChannel priorit
 }
 
 func newPriorityChannelsGroupByFreqRatio[T any](
-	ctx context.Context,
-	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T]) []channels.ChannelWithFreqRatio[msgWithChannelName[T]] {
-	res := make([]channels.ChannelWithFreqRatio[msgWithChannelName[T]], 0, len(priorityChannelsWithFreqRatio))
+	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T]) []channels.ChannelWithFreqRatio[T] {
+	res := make([]channels.ChannelWithFreqRatio[T], 0, len(priorityChannelsWithFreqRatio))
 
 	for _, q := range priorityChannelsWithFreqRatio {
-		msgWithNameC, fnGetClosedChannelDetails, fnIsReady := processPriorityChannelToMsgsWithChannelName(ctx, q.PriorityChannel())
-		channel := channels.NewChannelWithFreqRatio[msgWithChannelName[T]](q.Name(), msgWithNameC, q.FreqRatio())
-		res = append(res, newChannelWithFreqRatioAndClosedChannelDetails(channel, fnGetClosedChannelDetails, fnIsReady))
+		res = append(res, q.PriorityChannel().AsSelectableChannelWithFreqRatio(q.Name(), q.FreqRatio()))
 	}
 	sort.Slice(res, func(i int, j int) bool {
 		return res[i].FreqRatio() > res[j].FreqRatio()
 	})
 	return res
-}
-
-type channelWithFreqRatioAndClosedChannelDetails[T any] struct {
-	channel                   channels.ChannelWithFreqRatio[T]
-	fnGetClosedChannelDetails func() (string, priority_channels.ReceiveStatus)
-	fnIsReady                 func() bool
-}
-
-func (c *channelWithFreqRatioAndClosedChannelDetails[T]) ChannelName() string {
-	return c.channel.ChannelName()
-}
-
-func (c *channelWithFreqRatioAndClosedChannelDetails[T]) MsgsC() <-chan T {
-	return c.channel.MsgsC()
-}
-
-func (c *channelWithFreqRatioAndClosedChannelDetails[T]) FreqRatio() int {
-	return c.channel.FreqRatio()
-}
-
-func (c *channelWithFreqRatioAndClosedChannelDetails[T]) GetUnderlyingClosedChannelDetails() (string, priority_channels.ReceiveStatus) {
-	return c.fnGetClosedChannelDetails()
-}
-
-func (c *channelWithFreqRatioAndClosedChannelDetails[T]) IsReady() bool {
-	return c.fnIsReady()
-}
-
-func (c *channelWithFreqRatioAndClosedChannelDetails[T]) Validate() error {
-	if err := c.channel.Validate(); err != nil {
-		return err
-	}
-	if c.fnGetClosedChannelDetails == nil {
-		return &priority_channels.FunctionNotSetError{FuncName: "GetUnderlyingClosedChannelDetails"}
-	}
-	if c.fnIsReady == nil {
-		return &priority_channels.FunctionNotSetError{FuncName: "IsReady"}
-	}
-	return nil
-}
-
-func newChannelWithFreqRatioAndClosedChannelDetails[T any](
-	channelWithFreqRatio channels.ChannelWithFreqRatio[T],
-	fnGetClosedChannelDetails func() (string, priority_channels.ReceiveStatus),
-	fnIsReady func() bool) channels.ChannelWithFreqRatio[T] {
-	return &channelWithFreqRatioAndClosedChannelDetails[T]{
-		channel:                   channelWithFreqRatio,
-		fnGetClosedChannelDetails: fnGetClosedChannelDetails,
-		fnIsReady:                 fnIsReady,
-	}
 }

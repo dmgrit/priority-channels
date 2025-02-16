@@ -2,10 +2,7 @@ package priority_channels
 
 import (
 	"context"
-	"reflect"
 	"sort"
-	"sync/atomic"
-	"time"
 
 	"github.com/dmgrit/priority-channels/channels"
 )
@@ -16,109 +13,82 @@ func NewByHighestAlwaysFirst[T any](ctx context.Context,
 	if err := validateInputChannels(convertChannelsWithPrioritiesToChannels(channelsWithPriorities)); err != nil {
 		return nil, err
 	}
-	return newPriorityChannelByPriority[T](ctx, channelsWithPriorities, options...), nil
-}
-
-func (pc *priorityChannelsHighestFirst[T]) Receive() (msg T, channelName string, ok bool) {
-	msg, channelName, status := pc.receiveSingleMessage(context.Background(), false)
-	if status != ReceiveSuccess {
-		return getZero[T](), channelName, false
-	}
-	return msg, channelName, true
-}
-
-func (pc *priorityChannelsHighestFirst[T]) ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus) {
-	return pc.receiveSingleMessage(ctx, false)
-}
-
-func (pc *priorityChannelsHighestFirst[T]) ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus) {
-	return pc.receiveSingleMessage(context.Background(), true)
-}
-
-func (pc *priorityChannelsHighestFirst[T]) Context() context.Context {
-	return pc.ctx
-}
-
-type priorityChannelsHighestFirst[T any] struct {
-	ctx                        context.Context
-	channels                   []channels.ChannelWithPriority[T]
-	isPreparing                atomic.Bool
-	channelReceiveWaitInterval *time.Duration
-}
-
-func newPriorityChannelByPriority[T any](
-	ctx context.Context,
-	channelsWithPriorities []channels.ChannelWithPriority[T],
-	options ...func(*PriorityChannelOptions)) *priorityChannelsHighestFirst[T] {
-	pqOptions := &PriorityChannelOptions{}
+	pcOptions := &PriorityChannelOptions{}
 	for _, option := range options {
-		option(pqOptions)
+		option(pcOptions)
 	}
-
-	pq := &priorityChannelsHighestFirst[T]{
+	return &priorityChannel[T]{
 		ctx:                        ctx,
-		channels:                   make([]channels.ChannelWithPriority[T], 0, len(channelsWithPriorities)),
-		channelReceiveWaitInterval: pqOptions.channelReceiveWaitInterval,
+		compositeChannel:           newCompositeChannelByPriority("", channelsWithPriorities),
+		channelReceiveWaitInterval: pcOptions.channelReceiveWaitInterval,
+	}, nil
+}
+
+func newCompositeChannelByPriority[T any](name string, channelsWithPriorities []channels.ChannelWithPriority[T]) channels.SelectableChannel[T] {
+	ch := &compositeChannelByPriority[T]{
+		channelName: name,
+		channels:    make([]channels.ChannelWithPriority[T], 0, len(channelsWithPriorities)),
 	}
 	for _, c := range channelsWithPriorities {
-		pq.channels = append(pq.channels, c)
+		ch.channels = append(ch.channels, c)
 	}
-	sort.Slice(pq.channels, func(i int, j int) bool {
-		return pq.channels[i].Priority() > pq.channels[j].Priority()
+	sort.Slice(ch.channels, func(i int, j int) bool {
+		return ch.channels[i].Priority() > ch.channels[j].Priority()
 	})
-	return pq
+	return ch
 }
 
-func (pc *priorityChannelsHighestFirst[T]) receiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, channelName string, status ReceiveStatus) {
-	pc.isPreparing.Store(true)
-	defer pc.isPreparing.Store(false)
-	lastPriorityChannelIndex := len(pc.channels) - 1
-	for currPriorityChannelIndex := 0; currPriorityChannelIndex <= lastPriorityChannelIndex; currPriorityChannelIndex++ {
-		chosen, recv, recvOk, selectStatus := selectCasesOfNextIteration(
-			pc.ctx,
-			ctx,
-			pc.prepareSelectCases,
-			currPriorityChannelIndex,
-			lastPriorityChannelIndex,
-			withDefaultCase,
-			&pc.isPreparing,
-			pc.channelReceiveWaitInterval)
-		if selectStatus == ReceiveStatusUnknown {
-			continue
-		} else if selectStatus != ReceiveSuccess {
-			return getZero[T](), "", selectStatus
-		}
-		channelName := pc.channels[chosen-2].ChannelName()
-		if !recvOk {
-			// no more messages in channel
-			if c, ok := pc.channels[chosen-2].(ChannelWithUnderlyingClosedChannelDetails); ok {
-				underlyingChannelName, closeStatus := c.GetUnderlyingClosedChannelDetails()
-				if underlyingChannelName == "" {
-					underlyingChannelName = channelName
-				}
-				return getZero[T](), underlyingChannelName, closeStatus
+type compositeChannelByPriority[T any] struct {
+	channelName string
+	channels    []channels.ChannelWithPriority[T]
+}
+
+func (c *compositeChannelByPriority[T]) ChannelName() string {
+	return c.channelName
+}
+
+func (c *compositeChannelByPriority[T]) NextSelectCases(upto int) ([]channels.SelectCase[T], bool, *channels.ClosedChannelDetails) {
+	added := 0
+	var selectCases []channels.SelectCase[T]
+	areAllCasesAdded := false
+	for i := 0; i <= len(c.channels)-1; i++ {
+		channelSelectCases, allSelected, closedChannel := c.channels[i].NextSelectCases(upto - added)
+		if closedChannel != nil {
+			return nil, true, &channels.ClosedChannelDetails{
+				ChannelName: closedChannel.ChannelName,
+				PathInTree: append(closedChannel.PathInTree, channels.ChannelNode{
+					ChannelName:  c.channelName,
+					ChannelIndex: i,
+				}),
 			}
-			return getZero[T](), channelName, ReceiveChannelClosed
 		}
-		// Message received successfully
-		msg := recv.Interface().(T)
-		return msg, channelName, ReceiveSuccess
+		for _, sc := range channelSelectCases {
+			selectCases = append(selectCases, channels.SelectCase[T]{
+				ChannelName: sc.ChannelName,
+				MsgsC:       sc.MsgsC,
+				PathInTree: append(sc.PathInTree, channels.ChannelNode{
+					ChannelName:  c.channelName,
+					ChannelIndex: i,
+				}),
+			})
+			added++
+			areAllCasesAdded = (i == len(c.channels)-1) && allSelected
+			if added == upto {
+				return selectCases, areAllCasesAdded, nil
+			}
+		}
 	}
-	return getZero[T](), "", ReceiveStatusUnknown
+	return selectCases, areAllCasesAdded, nil
 }
 
-func (pc *priorityChannelsHighestFirst[T]) prepareSelectCases(currPriorityChannelIndex int) []reflect.SelectCase {
-	var selectCases []reflect.SelectCase
-	for i := 0; i <= currPriorityChannelIndex; i++ {
-		waitForReadyStatus(pc.channels[i])
-		selectCases = append(selectCases, reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(pc.channels[i].MsgsC()),
-		})
+func (c *compositeChannelByPriority[T]) UpdateOnCaseSelected(pathInTree []channels.ChannelNode) {
+	if len(pathInTree) == 0 {
+		return
 	}
-	return selectCases
+	selectedChannel := c.channels[pathInTree[len(pathInTree)-1].ChannelIndex]
+	selectedChannel.UpdateOnCaseSelected(pathInTree[:len(pathInTree)-1])
 }
 
-func (pc *priorityChannelsHighestFirst[T]) IsReady() bool {
-	return pc.isPreparing.Load() == false
+func (c *compositeChannelByPriority[T]) Validate() error {
+	return nil
 }
