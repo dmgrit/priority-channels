@@ -2,9 +2,11 @@ package priority_channels
 
 import (
 	"context"
-	"github.com/dmgrit/priority-channels/channels"
+	"errors"
 	"reflect"
 	"time"
+
+	"github.com/dmgrit/priority-channels/channels"
 )
 
 type priorityChannel[T any] struct {
@@ -64,6 +66,13 @@ func (w *wrapCompositeChannelWithNameAndPriority[T]) Priority() int {
 	return w.priority
 }
 
+func (w *wrapCompositeChannelWithNameAndPriority[T]) Validate() error {
+	if w.priority < 0 {
+		return errors.New("priority cannot be negative")
+	}
+	return w.overrideCompositeChannelName.Validate()
+}
+
 type wrapCompositeChannelWithNameAndFreqRatio[T any] struct {
 	overrideCompositeChannelName[T]
 	freqRatio int
@@ -71,6 +80,13 @@ type wrapCompositeChannelWithNameAndFreqRatio[T any] struct {
 
 func (w *wrapCompositeChannelWithNameAndFreqRatio[T]) FreqRatio() int {
 	return w.freqRatio
+}
+
+func (w *wrapCompositeChannelWithNameAndFreqRatio[T]) Validate() error {
+	if w.freqRatio <= 0 {
+		return errors.New("frequency ratio must be greater than 0")
+	}
+	return w.overrideCompositeChannelName.Validate()
 }
 
 type overrideCompositeChannelName[T any] struct {
