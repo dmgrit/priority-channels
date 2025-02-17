@@ -2,20 +2,20 @@ package priority_channels
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"time"
 
 	"github.com/dmgrit/priority-channels/channels"
+	"github.com/dmgrit/priority-channels/internal/selectable"
 )
 
-type priorityChannel[T any] struct {
+type PriorityChannel[T any] struct {
 	ctx                        context.Context
-	compositeChannel           channels.SelectableChannel[T]
+	compositeChannel           selectable.Channel[T]
 	channelReceiveWaitInterval *time.Duration
 }
 
-func (pc *priorityChannel[T]) Receive() (msg T, channelName string, ok bool) {
+func (pc *PriorityChannel[T]) Receive() (msg T, channelName string, ok bool) {
 	msg, channelName, status := pc.receiveSingleMessage(context.Background(), false)
 	if status != ReceiveSuccess {
 		return getZero[T](), channelName, false
@@ -23,19 +23,15 @@ func (pc *priorityChannel[T]) Receive() (msg T, channelName string, ok bool) {
 	return msg, channelName, true
 }
 
-func (pc *priorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus) {
+func (pc *PriorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus) {
 	return pc.receiveSingleMessage(ctx, false)
 }
 
-func (pc *priorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus) {
+func (pc *PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus) {
 	return pc.receiveSingleMessage(context.Background(), true)
 }
 
-func (pc *priorityChannel[T]) Context() context.Context {
-	return pc.ctx
-}
-
-func (pc *priorityChannel[T]) AsSelectableChannelWithPriority(name string, priority int) channels.ChannelWithPriority[T] {
+func (pc *PriorityChannel[T]) asSelectableChannelWithPriority(name string, priority int) selectable.ChannelWithPriority[T] {
 	return &wrapCompositeChannelWithNameAndPriority[T]{
 		overrideCompositeChannelName: overrideCompositeChannelName[T]{
 			ctx:     pc.ctx,
@@ -46,7 +42,7 @@ func (pc *priorityChannel[T]) AsSelectableChannelWithPriority(name string, prior
 	}
 }
 
-func (pc *priorityChannel[T]) AsSelectableChannelWithFreqRatio(name string, freqRatio int) channels.ChannelWithFreqRatio[T] {
+func (pc *PriorityChannel[T]) asSelectableChannelWithFreqRatio(name string, freqRatio int) selectable.ChannelWithFreqRatio[T] {
 	return &wrapCompositeChannelWithNameAndFreqRatio[T]{
 		overrideCompositeChannelName: overrideCompositeChannelName[T]{
 			ctx:     pc.ctx,
@@ -68,7 +64,7 @@ func (w *wrapCompositeChannelWithNameAndPriority[T]) Priority() int {
 
 func (w *wrapCompositeChannelWithNameAndPriority[T]) Validate() error {
 	if w.priority < 0 {
-		return errors.New("priority cannot be negative")
+		return channels.ErrPriorityIsNegative
 	}
 	return w.overrideCompositeChannelName.Validate()
 }
@@ -84,7 +80,7 @@ func (w *wrapCompositeChannelWithNameAndFreqRatio[T]) FreqRatio() int {
 
 func (w *wrapCompositeChannelWithNameAndFreqRatio[T]) Validate() error {
 	if w.freqRatio <= 0 {
-		return errors.New("frequency ratio must be greater than 0")
+		return channels.ErrFreqRatioMustBeGreaterThanZero
 	}
 	return w.overrideCompositeChannelName.Validate()
 }
@@ -92,17 +88,17 @@ func (w *wrapCompositeChannelWithNameAndFreqRatio[T]) Validate() error {
 type overrideCompositeChannelName[T any] struct {
 	ctx     context.Context
 	name    string
-	channel channels.SelectableChannel[T]
+	channel selectable.Channel[T]
 }
 
 func (oc *overrideCompositeChannelName[T]) ChannelName() string {
 	return oc.name
 }
 
-func (oc *overrideCompositeChannelName[T]) NextSelectCases(upto int) ([]channels.SelectCase[T], bool, *channels.ClosedChannelDetails) {
+func (oc *overrideCompositeChannelName[T]) NextSelectCases(upto int) ([]selectable.SelectCase[T], bool, *selectable.ClosedChannelDetails) {
 	select {
 	case <-oc.ctx.Done():
-		return nil, true, &channels.ClosedChannelDetails{
+		return nil, true, &selectable.ClosedChannelDetails{
 			ChannelName: oc.ChannelName(),
 			PathInTree:  nil,
 		}
@@ -121,7 +117,7 @@ func (oc *overrideCompositeChannelName[T]) NextSelectCases(upto int) ([]channels
 	}
 }
 
-func (oc *overrideCompositeChannelName[T]) UpdateOnCaseSelected(pathInTree []channels.ChannelNode) {
+func (oc *overrideCompositeChannelName[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode) {
 	oc.channel.UpdateOnCaseSelected(pathInTree)
 }
 
@@ -132,7 +128,7 @@ func (oc *overrideCompositeChannelName[T]) Validate() error {
 	return oc.channel.Validate()
 }
 
-func (pc *priorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, channelName string, status ReceiveStatus) {
+func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, channelName string, status ReceiveStatus) {
 	currNumOfChannelsToProcess := 0
 	for {
 		currNumOfChannelsToProcess++
@@ -164,10 +160,10 @@ func (pc *priorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 	}
 }
 
-func (pc *priorityChannel[T]) selectCasesOfNextIteration(
+func (pc *PriorityChannel[T]) selectCasesOfNextIteration(
 	priorityChannelContext context.Context,
 	currRequestContext context.Context,
-	channelsSelectCases []channels.SelectCase[T],
+	channelsSelectCases []selectable.SelectCase[T],
 	isLastIteration bool,
 	withDefaultCase bool,
 	channelReceiveWaitInterval *time.Duration) (chosen int, recv reflect.Value, recvOk bool, status ReceiveStatus) {

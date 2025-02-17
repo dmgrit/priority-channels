@@ -3,7 +3,8 @@ package priority_channels
 import (
 	"errors"
 	"fmt"
-	"github.com/dmgrit/priority-channels/channels"
+
+	"github.com/dmgrit/priority-channels/internal/selectable"
 )
 
 var (
@@ -36,7 +37,7 @@ func (e *FunctionNotSetError) Error() string {
 	return fmt.Sprintf("%s  function is not set", e.FuncName)
 }
 
-func validateInputChannels[T any](channels []channels.SelectableChannel[T]) error {
+func validateInputChannels[T any](channels []selectable.Channel[T]) error {
 	if len(channels) == 0 {
 		return ErrNoChannels
 	}
@@ -56,16 +57,16 @@ func validateInputChannels[T any](channels []channels.SelectableChannel[T]) erro
 	return nil
 }
 
-func convertChannelsWithPrioritiesToChannels[T any](channelsWithPriorities []channels.ChannelWithPriority[T]) []channels.SelectableChannel[T] {
-	res := make([]channels.SelectableChannel[T], 0, len(channelsWithPriorities))
+func convertChannelsWithPrioritiesToChannels[T any](channelsWithPriorities []selectable.ChannelWithPriority[T]) []selectable.Channel[T] {
+	res := make([]selectable.Channel[T], 0, len(channelsWithPriorities))
 	for _, c := range channelsWithPriorities {
 		res = append(res, c)
 	}
 	return res
 }
 
-func convertChannelsWithFreqRatiosToChannels[T any](channelsWithFreqRatios []channels.ChannelWithFreqRatio[T]) []channels.SelectableChannel[T] {
-	res := make([]channels.SelectableChannel[T], 0, len(channelsWithFreqRatios))
+func convertChannelsWithFreqRatiosToChannels[T any](channelsWithFreqRatios []selectable.ChannelWithFreqRatio[T]) []selectable.Channel[T] {
+	res := make([]selectable.Channel[T], 0, len(channelsWithFreqRatios))
 	for _, c := range channelsWithFreqRatios {
 		res = append(res, c)
 	}

@@ -3,10 +3,10 @@ package priority_channels
 import (
 	"context"
 
-	"github.com/dmgrit/priority-channels/channels"
+	"github.com/dmgrit/priority-channels/internal/selectable"
 )
 
-func WrapAsPriorityChannel[T any](ctx context.Context, channelName string, msgsC <-chan T, options ...func(*PriorityChannelOptions)) (PriorityChannel[T], error) {
+func WrapAsPriorityChannel[T any](ctx context.Context, channelName string, msgsC <-chan T, options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
 	if channelName == "" {
 		return nil, ErrEmptyChannelName
 	}
@@ -19,7 +19,7 @@ func WrapAsPriorityChannel[T any](ctx context.Context, channelName string, msgsC
 		channelName: channelName,
 		msgsC:       msgsC,
 	}
-	return &priorityChannel[T]{
+	return &PriorityChannel[T]{
 		ctx:                        ctx,
 		compositeChannel:           compositeChannel,
 		channelReceiveWaitInterval: pcOptions.channelReceiveWaitInterval,
@@ -36,15 +36,15 @@ func (w *wrappedChannel[T]) ChannelName() string {
 	return w.channelName
 }
 
-func (w *wrappedChannel[T]) NextSelectCases(upto int) (selectCases []channels.SelectCase[T], isLastIteration bool, closedChannel *channels.ClosedChannelDetails) {
+func (w *wrappedChannel[T]) NextSelectCases(upto int) (selectCases []selectable.SelectCase[T], isLastIteration bool, closedChannel *selectable.ClosedChannelDetails) {
 	select {
 	case <-w.ctx.Done():
-		return nil, true, &channels.ClosedChannelDetails{
+		return nil, true, &selectable.ClosedChannelDetails{
 			ChannelName: w.channelName,
 			PathInTree:  nil,
 		}
 	default:
-		return []channels.SelectCase[T]{
+		return []selectable.SelectCase[T]{
 			{
 				ChannelName: w.channelName,
 				MsgsC:       w.msgsC,
@@ -53,7 +53,7 @@ func (w *wrappedChannel[T]) NextSelectCases(upto int) (selectCases []channels.Se
 	}
 }
 
-func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []channels.ChannelNode) {}
+func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode) {}
 
 func (c *wrappedChannel[T]) Validate() error {
 	if c.channelName == "" {

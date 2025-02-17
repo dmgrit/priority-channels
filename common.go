@@ -3,22 +3,7 @@ package priority_channels
 import (
 	"context"
 	"time"
-
-	"github.com/dmgrit/priority-channels/channels"
 )
-
-type PriorityChannel[T any] interface {
-	Receive() (msg T, channelName string, ok bool)
-	ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus)
-	ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus)
-	AsSelectableChannelWithPriority(name string, priority int) channels.ChannelWithPriority[T]
-	AsSelectableChannelWithFreqRatio(name string, freqRatio int) channels.ChannelWithFreqRatio[T]
-}
-
-type PriorityChannelWithContext[T any] interface {
-	PriorityChannel[T]
-	Context() context.Context
-}
 
 type ReceiveStatus int
 
@@ -63,7 +48,7 @@ func ChannelWaitInterval(d time.Duration) func(opt *PriorityChannelOptions) {
 }
 
 func ProcessPriorityChannelMessages[T any](
-	msgReceiver PriorityChannel[T],
+	msgReceiver *PriorityChannel[T],
 	msgProcessor func(ctx context.Context, msg T, channelName string)) ExitReason {
 	for {
 		// There is no context per-message, but there is a single context for the entire priority-channel
@@ -73,12 +58,7 @@ func ProcessPriorityChannelMessages[T any](
 		if status != ReceiveSuccess {
 			return status.ExitReason()
 		}
-		ctx := context.Background()
-		msgReceiverWithContext, ok := msgReceiver.(PriorityChannelWithContext[T])
-		if ok {
-			ctx = msgReceiverWithContext.Context()
-		}
-		msgProcessor(ctx, msg, channelName)
+		msgProcessor(msgReceiver.ctx, msg, channelName)
 	}
 }
 

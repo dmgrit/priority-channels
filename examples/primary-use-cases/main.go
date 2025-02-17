@@ -53,7 +53,7 @@ func main() {
 		}
 	}
 
-	var ch priority_channels.PriorityChannel[string]
+	var ch *priority_channels.PriorityChannel[string]
 	var err error
 	if isByFrequencyRatio {
 		ch, err = priority_channels.NewByFrequencyRatio(ctx, channelsWithFreqRatio)

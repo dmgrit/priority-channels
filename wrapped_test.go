@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	priority_channels "github.com/dmgrit/priority-channels"
+	"github.com/dmgrit/priority-channels"
 )
 
 func TestWrapAsPriorityChannelValidation(t *testing.T) {

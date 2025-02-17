@@ -5,11 +5,22 @@ import (
 	"sort"
 
 	"github.com/dmgrit/priority-channels/channels"
+	"github.com/dmgrit/priority-channels/internal/selectable"
 )
 
 func NewByFrequencyRatio[T any](ctx context.Context,
 	channelsWithFreqRatios []channels.ChannelWithFreqRatio[T],
-	options ...func(*PriorityChannelOptions)) (PriorityChannel[T], error) {
+	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
+	selectableChannels := make([]selectable.ChannelWithFreqRatio[T], 0, len(channelsWithFreqRatios))
+	for _, c := range channelsWithFreqRatios {
+		selectableChannels = append(selectableChannels, selectable.NewChannelWithFreqRatio(c))
+	}
+	return newByFrequencyRatio(ctx, selectableChannels, options...)
+}
+
+func newByFrequencyRatio[T any](ctx context.Context,
+	channelsWithFreqRatios []selectable.ChannelWithFreqRatio[T],
+	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
 	if err := validateInputChannels(convertChannelsWithFreqRatiosToChannels(channelsWithFreqRatios)); err != nil {
 		return nil, err
 	}
@@ -17,14 +28,14 @@ func NewByFrequencyRatio[T any](ctx context.Context,
 	for _, option := range options {
 		option(pcOptions)
 	}
-	return &priorityChannel[T]{
+	return &PriorityChannel[T]{
 		ctx:                        ctx,
 		compositeChannel:           newCompositeChannelByFreqRatio("", channelsWithFreqRatios),
 		channelReceiveWaitInterval: pcOptions.channelReceiveWaitInterval,
 	}, nil
 }
 
-func newCompositeChannelByFreqRatio[T any](name string, channelsWithFreqRatios []channels.ChannelWithFreqRatio[T]) channels.SelectableChannel[T] {
+func newCompositeChannelByFreqRatio[T any](name string, channelsWithFreqRatios []selectable.ChannelWithFreqRatio[T]) selectable.Channel[T] {
 	zeroLevel := &level[T]{}
 	zeroLevel.Buckets = make([]*priorityBucket[T], 0, len(channelsWithFreqRatios))
 	for _, q := range channelsWithFreqRatios {
@@ -46,7 +57,7 @@ func newCompositeChannelByFreqRatio[T any](name string, channelsWithFreqRatios [
 }
 
 type priorityBucket[T any] struct {
-	Channel channels.ChannelWithFreqRatio[T]
+	Channel selectable.ChannelWithFreqRatio[T]
 	Value   int
 }
 
@@ -74,29 +85,29 @@ func (c *compositeChannelByFreqRatio[T]) ChannelName() string {
 	return c.channelName
 }
 
-func (c *compositeChannelByFreqRatio[T]) NextSelectCases(upto int) ([]channels.SelectCase[T], bool, *channels.ClosedChannelDetails) {
+func (c *compositeChannelByFreqRatio[T]) NextSelectCases(upto int) ([]selectable.SelectCase[T], bool, *selectable.ClosedChannelDetails) {
 	addedBuckets := 0
 	numOfBucketsToProcess := upto
 	currIndex := 0
-	selectCases := make([]channels.SelectCase[T], 0, numOfBucketsToProcess)
+	selectCases := make([]selectable.SelectCase[T], 0, numOfBucketsToProcess)
 	areAllCasesAdded := false
 	for i, level := range c.levels {
 		for j, b := range level.Buckets {
 			channelSelectCases, allSelected, closedChannel := b.Channel.NextSelectCases(upto - addedBuckets)
 			if closedChannel != nil {
-				return nil, true, &channels.ClosedChannelDetails{
+				return nil, true, &selectable.ClosedChannelDetails{
 					ChannelName: closedChannel.ChannelName,
-					PathInTree: append(closedChannel.PathInTree, channels.ChannelNode{
+					PathInTree: append(closedChannel.PathInTree, selectable.ChannelNode{
 						ChannelName:  c.channelName,
 						ChannelIndex: i,
 					}),
 				}
 			}
 			for _, sc := range channelSelectCases {
-				selectCases = append(selectCases, channels.SelectCase[T]{
+				selectCases = append(selectCases, selectable.SelectCase[T]{
 					MsgsC:       sc.MsgsC,
 					ChannelName: sc.ChannelName,
-					PathInTree: append(sc.PathInTree, channels.ChannelNode{
+					PathInTree: append(sc.PathInTree, selectable.ChannelNode{
 						ChannelName:  c.channelName,
 						ChannelIndex: currIndex,
 					}),
@@ -113,7 +124,7 @@ func (c *compositeChannelByFreqRatio[T]) NextSelectCases(upto int) ([]channels.S
 	return selectCases, areAllCasesAdded, nil
 }
 
-func (c *compositeChannelByFreqRatio[T]) UpdateOnCaseSelected(pathInTree []channels.ChannelNode) {
+func (c *compositeChannelByFreqRatio[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode) {
 	if len(pathInTree) == 0 {
 		return
 	}

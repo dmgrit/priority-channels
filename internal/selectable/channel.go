@@ -1,6 +1,6 @@
-package channels
+package selectable
 
-type SelectableChannel[T any] interface {
+type Channel[T any] interface {
 	ChannelName() string
 	NextSelectCases(upto int) (selectCases []SelectCase[T], isLastIteration bool, closedChannel *ClosedChannelDetails)
 	UpdateOnCaseSelected(pathInTree []ChannelNode)

@@ -1,4 +1,4 @@
-package priority_channel_groups_test
+package priority_channels_test
 
 import (
 	"context"
@@ -9,7 +9,6 @@ import (
 
 	"github.com/dmgrit/priority-channels"
 	"github.com/dmgrit/priority-channels/channels"
-	"github.com/dmgrit/priority-channels/priority-channel-groups"
 )
 
 func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups(t *testing.T) {
@@ -48,16 +47,16 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups(t *testing.T) {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 
-	channelsWithFreqRatio := []priority_channel_groups.PriorityChannelWithFreqRatio[string]{
-		priority_channel_groups.NewPriorityChannelWithFreqRatio("Paying Customer",
+	channelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
+		priority_channels.NewPriorityChannelWithFreqRatio("Paying Customer",
 			payingCustomerPriorityChannel,
 			10),
-		priority_channel_groups.NewPriorityChannelWithFreqRatio("Free User",
+		priority_channels.NewPriorityChannelWithFreqRatio("Free User",
 			freeUserPriorityChannel,
 			1),
 	}
 
-	ch, err := priority_channel_groups.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio)
+	ch, err := priority_channels.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -242,15 +241,15 @@ func TestProcessMessagesScenario(t *testing.T) {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 
-	channelsWithFreqRatio := []priority_channel_groups.PriorityChannelWithFreqRatio[string]{
-		priority_channel_groups.NewPriorityChannelWithFreqRatio(
+	channelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
+		priority_channels.NewPriorityChannelWithFreqRatio(
 			"Freq-Ratio-9",
 			freqRatio9PriorityChannel,
 			9),
-		priority_channel_groups.NewPriorityChannelWithFreqRatio(
+		priority_channels.NewPriorityChannelWithFreqRatio(
 			"Freq-Ratio-1", freqRatio1PriorityChannel, 1),
 	}
-	ch, err := priority_channel_groups.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio)
+	ch, err := priority_channels.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -322,15 +321,15 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_ChannelClosed(t *
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 
-	channelsWithFreqRatio := []priority_channel_groups.PriorityChannelWithFreqRatio[string]{
-		priority_channel_groups.NewPriorityChannelWithFreqRatio("Paying Customer",
+	channelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
+		priority_channels.NewPriorityChannelWithFreqRatio("Paying Customer",
 			payingCustomerPriorityChannel,
 			10),
-		priority_channel_groups.NewPriorityChannelWithFreqRatio("Free User",
+		priority_channels.NewPriorityChannelWithFreqRatio("Free User",
 			freeUserPriorityChannel,
 			1),
 	}
-	ch, err := priority_channel_groups.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio)
+	ch, err := priority_channels.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -451,17 +450,17 @@ func TestFreqRatioChannelGroupsValidation(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			ctx := context.Background()
 
-			priorityChannels := make([]priority_channel_groups.PriorityChannelWithFreqRatio[string], 0, len(tc.ChannelsWithFreqRatios))
+			priorityChannels := make([]priority_channels.PriorityChannelWithFreqRatio[string], 0, len(tc.ChannelsWithFreqRatios))
 			for _, ch := range tc.ChannelsWithFreqRatios {
 				pch, err := priority_channels.WrapAsPriorityChannel(ctx, "******", make(chan string)) //ch.MsgsC())
 				if err != nil {
 					t.Fatalf("Unexpected error on wrapping as priority channel: %v", err)
 				}
-				priorityChannels = append(priorityChannels, priority_channel_groups.NewPriorityChannelWithFreqRatio(
+				priorityChannels = append(priorityChannels, priority_channels.NewPriorityChannelWithFreqRatio(
 					ch.ChannelName(), pch, ch.FreqRatio()))
 			}
 
-			_, err := priority_channel_groups.CombineByFrequencyRatio(ctx, priorityChannels)
+			_, err := priority_channels.CombineByFrequencyRatio(ctx, priorityChannels)
 			if tc.ExpectedErrorMessage == "" {
 				if err != nil {
 					t.Fatalf("Unexpected validation error: %v", err)
