@@ -18,6 +18,11 @@ func NewByFreqRatio() *ByFreqRatio {
 	return &ByFreqRatio{}
 }
 
+func byFreqPriorityBucketsSortingFunc(b1, b2 *priorityBucket) bool {
+	return (b1.Capacity > b2.Capacity) ||
+		(b1.Capacity == b2.Capacity && b1.OrigChannelIndex > b2.OrigChannelIndex)
+}
+
 func (s *ByFreqRatio) Initialize(freqRatios []int) error {
 	zeroLevel := &level{}
 	zeroLevel.Buckets = make([]*priorityBucket, 0, len(freqRatios))
@@ -39,11 +44,8 @@ func (s *ByFreqRatio) Initialize(freqRatios []int) error {
 		zeroLevel.TotalCapacity += bucket.Capacity
 	}
 	sort.Slice(zeroLevel.Buckets, func(i int, j int) bool {
-		return zeroLevel.Buckets[i].Capacity > zeroLevel.Buckets[j].Capacity
+		return byFreqPriorityBucketsSortingFunc(zeroLevel.Buckets[i], zeroLevel.Buckets[j])
 	})
-	for i, bucket := range zeroLevel.Buckets {
-		bucket.BucketIndex = i
-	}
 
 	s.levels = []*level{zeroLevel}
 	s.totalBuckets = len(freqRatios)
@@ -65,14 +67,22 @@ func (s *ByFreqRatio) NextSelectCasesIndexes(upto int) []int {
 
 func (s *ByFreqRatio) UpdateOnCaseSelected(index int) {
 	bucket := s.origIndexToBucket[index]
-	s.updateStateOnReceivingMessageToBucket(bucket.LevelIndex, bucket.BucketIndex)
+	levelBuckets := s.levels[bucket.LevelIndex].Buckets
+	bucketIndex := sort.Search(len(levelBuckets), func(i int) bool {
+		return (bucket.Capacity > levelBuckets[i].Capacity) ||
+			(bucket.Capacity == levelBuckets[i].Capacity && bucket.OrigChannelIndex >= levelBuckets[i].OrigChannelIndex)
+	})
+	if bucketIndex == len(levelBuckets) || levelBuckets[bucketIndex].OrigChannelIndex != index {
+		// this should never happen
+		return
+	}
+	s.updateStateOnReceivingMessageToBucket(bucket.LevelIndex, bucketIndex)
 }
 
 type priorityBucket struct {
 	Value            int
 	Capacity         int
 	LevelIndex       int
-	BucketIndex      int
 	OrigChannelIndex int
 }
 
@@ -106,15 +116,14 @@ func (c *ByFreqRatio) mergeAllNextLevelsBackIntoCurrentLevel(levelIndex int) {
 			chosenLevel.Buckets = append(chosenLevel.Buckets, nextLevel.Buckets...)
 		}
 		sort.Slice(chosenLevel.Buckets, func(i int, j int) bool {
-			return chosenLevel.Buckets[i].Capacity > chosenLevel.Buckets[j].Capacity
+			return byFreqPriorityBucketsSortingFunc(chosenLevel.Buckets[i], chosenLevel.Buckets[j])
 		})
 		c.levels = c.levels[0 : levelIndex+1]
 	}
 	chosenLevel.TotalValue = 0
-	for i, bucket := range chosenLevel.Buckets {
+	for _, bucket := range chosenLevel.Buckets {
 		bucket.Value = 0
 		bucket.LevelIndex = levelIndex
-		bucket.BucketIndex = i
 	}
 }
 
@@ -133,18 +142,12 @@ func (c *ByFreqRatio) moveBucketToNextLevel(levelIndex int, bucketIndex int) {
 	nextLevel := c.levels[levelIndex+1]
 	nextLevel.TotalCapacity += chosenBucket.Capacity
 	chosenLevel.Buckets = append(chosenLevel.Buckets[:bucketIndex], chosenLevel.Buckets[bucketIndex+1:]...)
-	for j := bucketIndex; j < len(chosenLevel.Buckets); j++ {
-		chosenLevel.Buckets[j].BucketIndex = j
-	}
 	i := sort.Search(len(nextLevel.Buckets), func(i int) bool {
-		return nextLevel.Buckets[i].Capacity < chosenBucket.Capacity
+		return (chosenBucket.Capacity > nextLevel.Buckets[i].Capacity) ||
+			(chosenBucket.Capacity == nextLevel.Buckets[i].Capacity && chosenBucket.OrigChannelIndex > nextLevel.Buckets[i].OrigChannelIndex)
 	})
 	nextLevel.Buckets = append(nextLevel.Buckets, &priorityBucket{})
 	copy(nextLevel.Buckets[i+1:], nextLevel.Buckets[i:])
 	nextLevel.Buckets[i] = chosenBucket
 	chosenBucket.LevelIndex = levelIndex + 1
-	chosenBucket.BucketIndex = i
-	for j := i + 1; j < len(nextLevel.Buckets); j++ {
-		nextLevel.Buckets[j].BucketIndex = j
-	}
 }
