@@ -57,17 +57,9 @@ func validateInputChannels[T any](channels []selectable.Channel[T]) error {
 	return nil
 }
 
-func convertChannelsWithPrioritiesToChannels[T any](channelsWithPriorities []selectable.ChannelWithPriority[T]) []selectable.Channel[T] {
-	res := make([]selectable.Channel[T], 0, len(channelsWithPriorities))
-	for _, c := range channelsWithPriorities {
-		res = append(res, c)
-	}
-	return res
-}
-
-func convertChannelsWithFreqRatiosToChannels[T any](channelsWithFreqRatios []selectable.ChannelWithFreqRatio[T]) []selectable.Channel[T] {
-	res := make([]selectable.Channel[T], 0, len(channelsWithFreqRatios))
-	for _, c := range channelsWithFreqRatios {
+func convertChannelsWithWeightsToChannels[T any, W any](channelsWithWeights []selectable.ChannelWithWeight[T, W]) []selectable.Channel[T] {
+	res := make([]selectable.Channel[T], 0, len(channelsWithWeights))
+	for _, c := range channelsWithWeights {
 		res = append(res, c)
 	}
 	return res

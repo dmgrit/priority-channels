@@ -2,16 +2,17 @@ package priority_channels
 
 import (
 	"context"
-	"sort"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
+	"github.com/dmgrit/priority-channels/strategies"
 )
 
 func CombineByHighestPriorityFirst[T any](ctx context.Context,
 	priorityChannelsWithPriority []PriorityChannelWithPriority[T],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
-	channels := newPriorityChannelsGroupByHighestPriorityFirst[T](priorityChannelsWithPriority)
-	return newByHighestAlwaysFirst[T](ctx, channels, options...)
+	channels := toSelectableChannelsWithWeightByPriority[T](priorityChannelsWithPriority)
+	strategy := strategies.NewByHighestAlwaysFirst()
+	return newByStrategy(ctx, strategy, channels, options...)
 }
 
 type PriorityChannelWithPriority[T any] struct {
@@ -40,16 +41,12 @@ func NewPriorityChannelWithPriority[T any](name string, priorityChannel *Priorit
 	}
 }
 
-func newPriorityChannelsGroupByHighestPriorityFirst[T any](
-	priorityChannelsWithPriority []PriorityChannelWithPriority[T]) []selectable.ChannelWithPriority[T] {
-	res := make([]selectable.ChannelWithPriority[T], 0, len(priorityChannelsWithPriority))
-
+func toSelectableChannelsWithWeightByPriority[T any](
+	priorityChannelsWithPriority []PriorityChannelWithPriority[T]) []selectable.ChannelWithWeight[T, int] {
+	res := make([]selectable.ChannelWithWeight[T, int], 0, len(priorityChannelsWithPriority))
 	for _, q := range priorityChannelsWithPriority {
 		priorityChannel := q.PriorityChannel()
-		res = append(res, priorityChannel.asSelectableChannelWithPriority(q.Name(), q.Priority()))
+		res = append(res, asSelectableChannelWithWeight(priorityChannel, q.Name(), q.Priority()))
 	}
-	sort.Slice(res, func(i int, j int) bool {
-		return res[i].Priority() > res[j].Priority()
-	})
 	return res
 }

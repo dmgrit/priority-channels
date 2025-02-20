@@ -1,0 +1,47 @@
+package selectable
+
+import (
+	"github.com/dmgrit/priority-channels/channels"
+)
+
+type ChannelWithWeight[T any, W any] interface {
+	Channel[T]
+	Weight() W
+}
+
+type channelWithWeight[T any, W any] struct {
+	channelName string
+	msgsC       <-chan T
+	weight      W
+}
+
+func (c *channelWithWeight[T, W]) ChannelName() string {
+	return c.channelName
+}
+
+func (c *channelWithWeight[T, W]) NextSelectCases(upto int) ([]SelectCase[T], bool, *ClosedChannelDetails) {
+	return []SelectCase[T]{
+		{
+			ChannelName: c.channelName,
+			MsgsC:       c.msgsC,
+		},
+	}, true, nil
+}
+
+func (c *channelWithWeight[T, W]) UpdateOnCaseSelected(pathInTree []ChannelNode) {}
+
+func (c *channelWithWeight[T, W]) Weight() W {
+	return c.weight
+}
+
+func (c *channelWithWeight[T, W]) Validate() error {
+	return nil
+}
+
+func NewChannelWithWeight[T any, W any](ch channels.ChannelWithWeight[T, W]) ChannelWithWeight[T, W] {
+	return &channelWithWeight[T, W]{
+		channelName: ch.ChannelName(),
+		msgsC:       ch.MsgsC(),
+		weight:      ch.Weight(),
+	}
+}

@@ -2,16 +2,17 @@ package priority_channels
 
 import (
 	"context"
-	"sort"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
+	"github.com/dmgrit/priority-channels/strategies"
 )
 
 func CombineByFrequencyRatio[T any](ctx context.Context,
 	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
-	channels := newPriorityChannelsGroupByFreqRatio[T](priorityChannelsWithFreqRatio)
-	return newByFrequencyRatio[T](ctx, channels, options...)
+	channels := toSelectableChannelsWithWeightByFreqRatio[T](priorityChannelsWithFreqRatio)
+	strategy := strategies.NewByFreqRatio()
+	return newByStrategy(ctx, strategy, channels, options...)
 }
 
 type PriorityChannelWithFreqRatio[T any] struct {
@@ -40,16 +41,12 @@ func NewPriorityChannelWithFreqRatio[T any](name string, priorityChannel *Priori
 	}
 }
 
-func newPriorityChannelsGroupByFreqRatio[T any](
-	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T]) []selectable.ChannelWithFreqRatio[T] {
-	res := make([]selectable.ChannelWithFreqRatio[T], 0, len(priorityChannelsWithFreqRatio))
-
+func toSelectableChannelsWithWeightByFreqRatio[T any](
+	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T]) []selectable.ChannelWithWeight[T, int] {
+	res := make([]selectable.ChannelWithWeight[T, int], 0, len(priorityChannelsWithFreqRatio))
 	for _, q := range priorityChannelsWithFreqRatio {
 		priorityChannel := q.PriorityChannel()
-		res = append(res, priorityChannel.asSelectableChannelWithFreqRatio(q.Name(), q.FreqRatio()))
+		res = append(res, asSelectableChannelWithWeight(priorityChannel, q.Name(), q.FreqRatio()))
 	}
-	sort.Slice(res, func(i int, j int) bool {
-		return res[i].FreqRatio() > res[j].FreqRatio()
-	})
 	return res
 }
