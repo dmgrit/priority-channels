@@ -54,10 +54,3 @@ func (w *wrappedChannel[T]) NextSelectCases(upto int) (selectCases []selectable.
 }
 
 func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode) {}
-
-func (c *wrappedChannel[T]) Validate() error {
-	if c.channelName == "" {
-		return ErrEmptyChannelName
-	}
-	return nil
-}

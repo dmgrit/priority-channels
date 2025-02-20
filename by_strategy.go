@@ -124,7 +124,3 @@ func (c *compositeChannelByPrioritization[T, W]) UpdateOnCaseSelected(pathInTree
 
 	c.strategy.UpdateOnCaseSelected(pathInTree[len(pathInTree)-1].ChannelIndex)
 }
-
-func (c *compositeChannelByPrioritization[T, W]) Validate() error {
-	return nil
-}

@@ -4,7 +4,6 @@ type Channel[T any] interface {
 	ChannelName() string
 	NextSelectCases(upto int) (selectCases []SelectCase[T], isLastIteration bool, closedChannel *ClosedChannelDetails)
 	UpdateOnCaseSelected(pathInTree []ChannelNode)
-	Validate() error
 }
 
 type SelectCase[T any] struct {

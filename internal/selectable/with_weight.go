@@ -34,10 +34,6 @@ func (c *channelWithWeight[T, W]) Weight() W {
 	return c.weight
 }
 
-func (c *channelWithWeight[T, W]) Validate() error {
-	return nil
-}
-
 func NewChannelWithWeight[T any, W any](ch channels.ChannelWithWeight[T, W]) ChannelWithWeight[T, W] {
 	return &channelWithWeight[T, W]{
 		channelName: ch.ChannelName(),

@@ -1,10 +1,11 @@
 package strategies
 
 import (
+	"errors"
 	"sort"
-
-	"github.com/dmgrit/priority-channels/channels"
 )
+
+var ErrPriorityIsNegative = errors.New("priority cannot be negative")
 
 type HighestAlwaysFirst struct {
 	sortedPriorities []sortedToOriginalIndex
@@ -25,7 +26,7 @@ func (s *HighestAlwaysFirst) Initialize(priorities []int) error {
 		if p < 0 {
 			return &WeightValidationError{
 				ChannelIndex: i,
-				Err:          channels.ErrPriorityIsNegative,
+				Err:          ErrPriorityIsNegative,
 			}
 		}
 		s.sortedPriorities = append(s.sortedPriorities, sortedToOriginalIndex{

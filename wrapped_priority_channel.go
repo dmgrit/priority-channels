@@ -26,10 +26,6 @@ func (w *wrapCompositeChannelWithNameAndWeight[T, W]) Weight() W {
 	return w.weight
 }
 
-func (w *wrapCompositeChannelWithNameAndWeight[T, W]) Validate() error {
-	return w.overrideCompositeChannelName.Validate()
-}
-
 type overrideCompositeChannelName[T any] struct {
 	ctx     context.Context
 	name    string
@@ -64,11 +60,4 @@ func (oc *overrideCompositeChannelName[T]) NextSelectCases(upto int) ([]selectab
 
 func (oc *overrideCompositeChannelName[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode) {
 	oc.channel.UpdateOnCaseSelected(pathInTree)
-}
-
-func (oc *overrideCompositeChannelName[T]) Validate() error {
-	if oc.name == "" {
-		return ErrEmptyChannelName
-	}
-	return oc.channel.Validate()
 }

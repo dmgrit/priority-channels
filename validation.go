@@ -29,14 +29,6 @@ func (e *ChannelValidationError) Error() string {
 	return fmt.Sprintf("channel '%s': %v", e.ChannelName, e.Err)
 }
 
-type FunctionNotSetError struct {
-	FuncName string
-}
-
-func (e *FunctionNotSetError) Error() string {
-	return fmt.Sprintf("%s  function is not set", e.FuncName)
-}
-
 func validateInputChannels[T any](channels []selectable.Channel[T]) error {
 	if len(channels) == 0 {
 		return ErrNoChannels
@@ -45,9 +37,6 @@ func validateInputChannels[T any](channels []selectable.Channel[T]) error {
 	for _, c := range channels {
 		if c.ChannelName() == "" {
 			return ErrEmptyChannelName
-		}
-		if err := c.Validate(); err != nil {
-			return &ChannelValidationError{ChannelName: c.ChannelName(), Err: err}
 		}
 		if _, ok := channelNames[c.ChannelName()]; ok {
 			return &DuplicateChannelError{ChannelName: c.ChannelName()}

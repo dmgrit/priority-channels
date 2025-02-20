@@ -1,11 +1,5 @@
 package channels
 
-import (
-	"errors"
-)
-
-var ErrPriorityIsNegative = errors.New("priority cannot be negative")
-
 type ChannelWithPriority[T any] struct {
 	channelName string
 	msgsC       <-chan T
@@ -22,13 +16,6 @@ func (c *ChannelWithPriority[T]) MsgsC() <-chan T {
 
 func (c *ChannelWithPriority[T]) Priority() int {
 	return c.priority
-}
-
-func (c *ChannelWithPriority[T]) Validate() error {
-	if c.priority < 0 {
-		return ErrPriorityIsNegative
-	}
-	return nil
 }
 
 func NewChannelWithPriority[T any](channelName string, msgsC <-chan T, priority int) ChannelWithPriority[T] {

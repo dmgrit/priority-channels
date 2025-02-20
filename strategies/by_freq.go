@@ -1,10 +1,11 @@
 package strategies
 
 import (
+	"errors"
 	"sort"
-
-	"github.com/dmgrit/priority-channels/channels"
 )
+
+var ErrFreqRatioMustBeGreaterThanZero = errors.New("frequency ratio must be greater than 0")
 
 type ByFreqRatio struct {
 	channelName       string
@@ -25,7 +26,7 @@ func (s *ByFreqRatio) Initialize(freqRatios []int) error {
 		if freqRatio <= 0 {
 			return &WeightValidationError{
 				ChannelIndex: i,
-				Err:          channels.ErrFreqRatioMustBeGreaterThanZero,
+				Err:          ErrFreqRatioMustBeGreaterThanZero,
 			}
 		}
 		bucket := &priorityBucket{
