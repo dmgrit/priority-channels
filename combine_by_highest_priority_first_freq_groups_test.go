@@ -69,7 +69,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups(t *testing.T) {
 		results = append(results, msg)
 	}
 
-	priorityChannel, err := priority_channels.CombineByHighestPriorityFirst(ctx, channels)
+	priorityChannel, err := priority_channels.CombineByHighestAlwaysFirst(ctx, channels)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_MessagesInOneOfThe
 		results = append(results, msg)
 	}
 
-	priorityChannel, err := priority_channels.CombineByHighestPriorityFirst(ctx, channels)
+	priorityChannel, err := priority_channels.CombineByHighestAlwaysFirst(ctx, channels)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_ChannelClosed(t *t
 			1),
 	}
 
-	ch, err := priority_channels.CombineByHighestPriorityFirst[string](ctx, channelsWithPriority)
+	ch, err := priority_channels.CombineByHighestAlwaysFirst[string](ctx, channelsWithPriority)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -363,7 +363,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_ExitOnDefaultCase(
 			freeUserPriorityChannel,
 			1),
 	}
-	ch, err := priority_channels.CombineByHighestPriorityFirst[string](ctx, channelsWithPriority)
+	ch, err := priority_channels.CombineByHighestAlwaysFirst[string](ctx, channelsWithPriority)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -423,7 +423,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_RequestContextCanc
 			freeUserPriorityChannel,
 			1),
 	}
-	ch, err := priority_channels.CombineByHighestPriorityFirst[string](ctx, channelsWithPriority)
+	ch, err := priority_channels.CombineByHighestAlwaysFirst[string](ctx, channelsWithPriority)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -489,7 +489,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_PriorityChannelCon
 
 	ctxWithCancel, cancel := context.WithCancel(context.Background())
 	cancel()
-	ch, err := priority_channels.CombineByHighestPriorityFirst[string](ctxWithCancel, channelsWithPriority)
+	ch, err := priority_channels.CombineByHighestAlwaysFirst[string](ctxWithCancel, channelsWithPriority)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -553,7 +553,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_InnerPriorityChann
 			1),
 	}
 
-	ch, err := priority_channels.CombineByHighestPriorityFirst[string](ctx, channelsWithPriority)
+	ch, err := priority_channels.CombineByHighestAlwaysFirst[string](ctx, channelsWithPriority)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -628,7 +628,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_DeepHierarchy_Inne
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 
-	ch, err := priority_channels.CombineByHighestPriorityFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
+	ch, err := priority_channels.CombineByHighestAlwaysFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
 		priority_channels.NewPriorityChannelWithPriority(
 			"Combined Users and Message Types",
 			combinedUsersAndMessageTypesPriorityChannel,
@@ -710,7 +710,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_DeepHierarchy_Chan
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 
-	ch, err := priority_channels.CombineByHighestPriorityFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
+	ch, err := priority_channels.CombineByHighestAlwaysFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
 		priority_channels.NewPriorityChannelWithPriority(
 			"Combined Users and Message Types",
 			combinedUsersAndMessageTypesPriorityChannel,
@@ -837,7 +837,7 @@ func TestCombineHighestAlwaysFirstPriorityChannelValidation(t *testing.T) {
 					ch.ChannelName(), pch, ch.Priority()))
 			}
 
-			_, err := priority_channels.CombineByHighestPriorityFirst(ctx, priorityChannels)
+			_, err := priority_channels.CombineByHighestAlwaysFirst(ctx, priorityChannels)
 			if tc.ExpectedErrorMessage == "" {
 				if err != nil {
 					t.Fatalf("Unexpected validation error: %v", err)

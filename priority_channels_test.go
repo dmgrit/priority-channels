@@ -213,7 +213,7 @@ func getPriorityChannelByUsagePattern(
 				freeUserPriorityChannel,
 				1),
 		}
-		return priority_channels.CombineByHighestPriorityFirst(ctx, priorityChannelsWithPriority)
+		return priority_channels.CombineByHighestAlwaysFirst(ctx, priorityChannelsWithPriority)
 
 	case NoStarvationOfFreeUser_HighPriorityMessagesAlwaysFirstForSameUser:
 		payingCustomerPriorityChannel, err := priority_channels.NewByHighestAlwaysFirst(ctx, []channels.ChannelWithPriority[string]{
@@ -346,7 +346,7 @@ func getPriorityChannelByUsagePattern(
 			return nil, fmt.Errorf("failed to create urgent message priority channel: %v", err)
 		}
 
-		return priority_channels.CombineByHighestPriorityFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
+		return priority_channels.CombineByHighestAlwaysFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
 			priority_channels.NewPriorityChannelWithPriority(
 				"Combined Users and Message Types",
 				combinedUsersAndMessageTypesPriorityChannel,
