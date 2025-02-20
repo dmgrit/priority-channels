@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,10 +20,10 @@ func main() {
 	var channelsWithFreqRatio []channels.ChannelWithFreqRatio[string]
 	var channelsWithPriority []channels.ChannelWithPriority[string]
 	var inputChannels []chan string
-	var triggerPauseChannels []chan struct{}
+	var triggerPauseOrCloseChannels []chan bool
 	for i := 1; i <= 5; i++ {
 		inputChannels = append(inputChannels, make(chan string))
-		triggerPauseChannels = append(triggerPauseChannels, make(chan struct{}))
+		triggerPauseOrCloseChannels = append(triggerPauseOrCloseChannels, make(chan bool))
 		channelsWithFreqRatio = append(channelsWithFreqRatio, channels.NewChannelWithFreqRatio(
 			fmt.Sprintf("Freq Ratio %d", i),
 			inputChannels[i-1],
@@ -67,16 +69,25 @@ func main() {
 
 	for i := 1; i <= 5; i++ {
 		go func(i int) {
-			pause := false
+			paused := false
+			closed := false
 			for {
 				select {
-				case <-triggerPauseChannels[i-1]:
-					pause = !pause
+				case b := <-triggerPauseOrCloseChannels[i-1]:
+					if b {
+						close(inputChannels[i-1])
+						closed = true
+					}
+					paused = !paused
 				default:
-					if !pause {
+					if !paused && !closed {
 						select {
-						case <-triggerPauseChannels[i-1]:
-							pause = !pause
+						case b := <-triggerPauseOrCloseChannels[i-1]:
+							if b {
+								close(inputChannels[i-1])
+								closed = true
+							}
+							paused = !paused
 						case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
 						}
 					} else {
@@ -98,29 +109,76 @@ func main() {
 		prevChannel := ""
 		streakLength := 0
 		for {
-			message, channel, ok := ch.Receive()
-			if !ok {
-				break
-			}
-			if channel == prevChannel {
-				streakLength++
+			ctx := context.Background()
+			message, channel, status := ch.ReceiveWithContext(ctx)
+			if status == priority_channels.ReceiveSuccess {
+				if channel == prevChannel {
+					streakLength++
+				} else {
+					streakLength = 1
+				}
+				prevChannel = channel
+				_, err := f.WriteString(fmt.Sprintf("%s (%d)\n", message, streakLength))
+				if err != nil {
+					fmt.Printf("Failed to write to file: %v\n", err)
+					cancel()
+					break
+				}
+			} else if status == priority_channels.ReceiveChannelClosed {
+				_, err := f.WriteString(fmt.Sprintf("Channel '%s' is closed\n", channel))
+				if err != nil {
+					fmt.Printf("Failed to write to file: %v\n", err)
+					cancel()
+					break
+				}
+			} else if status == priority_channels.ReceivePriorityChannelCancelled {
+				var err error
+				if channel == "" {
+					_, err = f.WriteString(fmt.Sprintf("Priority Channel is closed\n"))
+				} else {
+					_, err = f.WriteString(fmt.Sprintf("Priority Channel '%s' is closed\n", channel))
+				}
+				if err != nil {
+					fmt.Printf("Failed to write to file: %v\n", err)
+					cancel()
+					break
+				}
 			} else {
-				streakLength = 1
+				_, err := f.WriteString(fmt.Sprintf("Unexpected status %s\n", channel))
+				if err != nil {
+					fmt.Printf("Failed to write to file: %v\n", err)
+					cancel()
+					break
+				}
 			}
-			prevChannel = channel
-			_, err := f.WriteString(fmt.Sprintf("%s (%d)\n", message, streakLength))
-			if err != nil {
-				fmt.Printf("Failed to write to file: %v\n", err)
-				cancel()
+
+			if status != priority_channels.ReceiveSuccess &&
+				status != priority_channels.ReceiveChannelClosed &&
+				(status != priority_channels.ReceivePriorityChannelCancelled || channel == "") {
+				_, err := f.WriteString("Exiting\n")
+				if err != nil {
+					fmt.Printf("Failed to write to file: %v\n", err)
+					cancel()
+					break
+				}
 				break
 			}
 			time.Sleep(300 * time.Millisecond)
 		}
 	}()
 
+	reader := bufio.NewReader(os.Stdin)
 	for {
 		var number int
-		_, err := fmt.Scanf("%d", &number)
+		line, _ := reader.ReadString('\n')
+		line = strings.TrimSpace(line)
+
+		isClose := false
+		if strings.HasPrefix(line, "c") {
+			isClose = true
+			line = strings.TrimPrefix(line, "c")
+		}
+		number, err := strconv.Atoi(line)
 		if err != nil || number < 0 || number > 5 {
 			continue
 		}
@@ -129,7 +187,11 @@ func main() {
 			cancel()
 			break
 		}
-		fmt.Printf("Toggling pause/resume for Channel %d\n", number)
-		triggerPauseChannels[number-1] <- struct{}{}
+		if isClose {
+			fmt.Printf("Closing Channel %d\n", number)
+		} else {
+			fmt.Printf("Toggling pause/resume for Channel %d\n", number)
+		}
+		triggerPauseOrCloseChannels[number-1] <- isClose
 	}
 }
