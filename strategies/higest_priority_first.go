@@ -40,6 +40,14 @@ func (s *HighestAlwaysFirst) Initialize(priorities []int) error {
 	return nil
 }
 
+func (s *HighestAlwaysFirst) InitializeWithTypeAssertion(priorities []interface{}) error {
+	prioritiesInt, err := convertWeightsWithTypeAssertion[int]("priority", priorities)
+	if err != nil {
+		return err
+	}
+	return s.Initialize(prioritiesInt)
+}
+
 func (s *HighestAlwaysFirst) NextSelectCasesIndexes(upto int) []int {
 	res := make([]int, 0, upto)
 	for i := 0; i < upto && i < len(s.sortedPriorities); i++ {

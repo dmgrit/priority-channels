@@ -52,6 +52,14 @@ func (s *ByFreqRatio) Initialize(freqRatios []int) error {
 	return nil
 }
 
+func (s *ByFreqRatio) InitializeWithTypeAssertion(freqRatios []interface{}) error {
+	freqRatiosInt, err := convertWeightsWithTypeAssertion[int]("frequency ratio", freqRatios)
+	if err != nil {
+		return err
+	}
+	return s.Initialize(freqRatiosInt)
+}
+
 func (s *ByFreqRatio) NextSelectCasesIndexes(upto int) []int {
 	res := make([]int, 0, upto)
 	for _, level := range s.levels {
