@@ -1,5 +1,26 @@
 package strategies
 
+import (
+	"fmt"
+)
+
+type InvalidNumberOfStrategiesError struct {
+	NumOfStrategies         int
+	ExpectedNumOfStrategies int
+}
+
+func (e *InvalidNumberOfStrategiesError) Error() string {
+	return fmt.Sprintf("invalid number of strategies: %d, expected %d", e.NumOfStrategies, e.ExpectedNumOfStrategies)
+}
+
+type UnknownStrategyError struct {
+	StrategyName string
+}
+
+func (e *UnknownStrategyError) Error() string {
+	return fmt.Sprintf("unknown strategy %s", e.StrategyName)
+}
+
 type DynamicSubStrategy interface {
 	InitializeWithTypeAssertion(weights []interface{}) error
 	NextSelectCasesIndexes(upto int) []int
@@ -25,7 +46,10 @@ func NewDynamic(
 func (s *Dynamic) Initialize(weights []map[string]interface{}) error {
 	s.origWeightsByStrategyName = make(map[string][]interface{})
 
-	for _, weightByStrategyName := range weights {
+	for channelIndex, weightByStrategyName := range weights {
+		if err := s.validateChannelWeightsStrategies(channelIndex, weightByStrategyName); err != nil {
+			return err
+		}
 		for strategyName, weight := range weightByStrategyName {
 			s.origWeightsByStrategyName[strategyName] = append(s.origWeightsByStrategyName[strategyName], weight)
 		}
@@ -37,6 +61,27 @@ func (s *Dynamic) Initialize(weights []map[string]interface{}) error {
 		}
 	}
 	s.currentStrategyName = s.currentStrategySelector()
+	return nil
+}
+
+func (s *Dynamic) validateChannelWeightsStrategies(channelIndex int, weightByStrategyName map[string]interface{}) error {
+	if len(weightByStrategyName) != len(s.strategiesByName) {
+		return &WeightValidationError{
+			ChannelIndex: channelIndex,
+			Err: &InvalidNumberOfStrategiesError{
+				NumOfStrategies:         len(weightByStrategyName),
+				ExpectedNumOfStrategies: len(s.strategiesByName),
+			},
+		}
+	}
+	for strategyName := range weightByStrategyName {
+		if _, ok := s.strategiesByName[strategyName]; !ok {
+			return &WeightValidationError{
+				ChannelIndex: channelIndex,
+				Err:          &UnknownStrategyError{StrategyName: strategyName},
+			}
+		}
+	}
 	return nil
 }
 

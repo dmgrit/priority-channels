@@ -213,6 +213,7 @@ func TestProcessMessagesByDynamicStrategy_FreqRatioIntegerTypeAssertion(t *testi
 		Name                 string
 		Strategy             strategies.DynamicSubStrategy
 		InvalidWeight        interface{}
+		InvalidStrategies    map[string]interface{}
 		ExpectedErrorMessage string
 	}{
 		{
@@ -233,6 +234,18 @@ func TestProcessMessagesByDynamicStrategy_FreqRatioIntegerTypeAssertion(t *testi
 			InvalidWeight:        1,
 			ExpectedErrorMessage: "channel 'Channel 1': first-decimal-digit priority must be of type float64",
 		},
+		{
+			Name:                 "Invalid number of strategies",
+			Strategy:             strategies.NewByFreqRatio(),
+			InvalidStrategies:    map[string]interface{}{"DayTime": 1},
+			ExpectedErrorMessage: "channel 'Channel 1': invalid number of strategies: 1, expected 2",
+		},
+		{
+			Name:                 "Unknown strategy",
+			Strategy:             strategies.NewByFreqRatio(),
+			InvalidStrategies:    map[string]interface{}{"DayTime": 1, "PartyTime": 10},
+			ExpectedErrorMessage: "channel 'Channel 1': unknown strategy PartyTime",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -241,12 +254,19 @@ func TestProcessMessagesByDynamicStrategy_FreqRatioIntegerTypeAssertion(t *testi
 				"DayTime":   tc.Strategy,
 				"NightTime": newByFirstDecimalDigitAsc(),
 			}
+
+			var channelWithInvalidWeights channels.ChannelWithWeight[*Msg, map[string]interface{}]
+			if tc.InvalidStrategies != nil {
+				channelWithInvalidWeights = channels.NewChannelWithWeight("Channel 1", msgsChannels[0], tc.InvalidStrategies)
+			} else {
+				channelWithInvalidWeights = channels.NewChannelWithWeight("Channel 1", msgsChannels[0], map[string]interface{}{
+					"DayTime":   tc.InvalidWeight,
+					"NightTime": 1.3,
+				})
+			}
+
 			channels := []channels.ChannelWithWeight[*Msg, map[string]interface{}]{
-				channels.NewChannelWithWeight("Channel 1", msgsChannels[0],
-					map[string]interface{}{
-						"DayTime":   tc.InvalidWeight,
-						"NightTime": 1.3,
-					}),
+				channelWithInvalidWeights,
 				channels.NewChannelWithWeight("Channel 2", msgsChannels[1],
 					map[string]interface{}{
 						"DayTime":   2,
