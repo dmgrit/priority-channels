@@ -10,7 +10,6 @@ var ErrFreqRatioMustBeGreaterThanZero = errors.New("frequency ratio must be grea
 type ByFreqRatio struct {
 	channelName       string
 	levels            []*level
-	totalBuckets      int
 	origIndexToBucket map[int]*priorityBucket
 }
 
@@ -41,14 +40,12 @@ func (s *ByFreqRatio) Initialize(freqRatios []int) error {
 		}
 		s.origIndexToBucket[i] = bucket
 		zeroLevel.Buckets = append(zeroLevel.Buckets, bucket)
-		zeroLevel.TotalCapacity += bucket.Capacity
 	}
 	sort.Slice(zeroLevel.Buckets, func(i int, j int) bool {
 		return byFreqPriorityBucketsSortingFunc(zeroLevel.Buckets[i], zeroLevel.Buckets[j])
 	})
 
 	s.levels = []*level{zeroLevel}
-	s.totalBuckets = len(freqRatios)
 	return nil
 }
 
@@ -95,67 +92,63 @@ type priorityBucket struct {
 }
 
 type level struct {
-	TotalValue    int
-	TotalCapacity int
-	Buckets       []*priorityBucket
+	Buckets []*priorityBucket
 }
 
-func (c *ByFreqRatio) updateStateOnReceivingMessageToBucket(levelIndex int, bucketIndex int) {
-	chosenLevel := c.levels[levelIndex]
+func (s *ByFreqRatio) updateStateOnReceivingMessageToBucket(levelIndex int, bucketIndex int) {
+	chosenLevel := s.levels[levelIndex]
 	chosenBucket := chosenLevel.Buckets[bucketIndex]
 	chosenBucket.Value++
-	chosenLevel.TotalValue++
 
-	if chosenLevel.TotalValue == chosenLevel.TotalCapacity {
-		c.mergeAllNextLevelsBackIntoCurrentLevel(levelIndex)
+	if chosenBucket.Value != chosenBucket.Capacity {
 		return
 	}
-	if chosenBucket.Value == chosenBucket.Capacity {
-		c.moveBucketToNextLevel(levelIndex, bucketIndex)
-		return
-	}
-}
-
-func (c *ByFreqRatio) mergeAllNextLevelsBackIntoCurrentLevel(levelIndex int) {
-	chosenLevel := c.levels[levelIndex]
-	if levelIndex < len(c.levels)-1 {
-		for nextLevelIndex := levelIndex + 1; nextLevelIndex <= len(c.levels)-1; nextLevelIndex++ {
-			nextLevel := c.levels[nextLevelIndex]
-			chosenLevel.Buckets = append(chosenLevel.Buckets, nextLevel.Buckets...)
-		}
-		sort.Slice(chosenLevel.Buckets, func(i int, j int) bool {
-			return byFreqPriorityBucketsSortingFunc(chosenLevel.Buckets[i], chosenLevel.Buckets[j])
-		})
-		c.levels = c.levels[0 : levelIndex+1]
-	}
-	chosenLevel.TotalValue = 0
-	for _, bucket := range chosenLevel.Buckets {
-		bucket.Value = 0
-		bucket.LevelIndex = levelIndex
-	}
-}
-
-func (c *ByFreqRatio) moveBucketToNextLevel(levelIndex int, bucketIndex int) {
-	chosenLevel := c.levels[levelIndex]
-	chosenBucket := chosenLevel.Buckets[bucketIndex]
 	chosenBucket.Value = 0
-	if len(chosenLevel.Buckets) == 1 {
-		// if this bucket is the only one on its level - no need to move it to next level
-		chosenLevel.TotalValue = 0
-		return
+	s.moveBucketToLastLevel(levelIndex, bucketIndex)
+
+	// if after moving the bucket to the last level the current level is empty, remove it
+	if len(chosenLevel.Buckets) == 0 {
+		s.removeEmptyLevel(levelIndex)
 	}
-	if levelIndex == len(c.levels)-1 {
-		c.levels = append(c.levels, &level{})
+}
+
+func (s *ByFreqRatio) moveBucketToLastLevel(levelIndex int, bucketIndex int) {
+	if levelIndex == len(s.levels)-1 {
+		if len(s.levels[levelIndex].Buckets) == 1 {
+			// if this bucket is currently in the last level,
+			// and it is the only one in the level, no need to move it
+			return
+		} else {
+			// the bucket is currently on the last level, and there are other buckets in the level
+			// Add a new level and move the bucket to it
+			s.levels = append(s.levels, &level{})
+		}
 	}
-	nextLevel := c.levels[levelIndex+1]
-	nextLevel.TotalCapacity += chosenBucket.Capacity
-	chosenLevel.Buckets = append(chosenLevel.Buckets[:bucketIndex], chosenLevel.Buckets[bucketIndex+1:]...)
-	i := sort.Search(len(nextLevel.Buckets), func(i int) bool {
-		return (chosenBucket.Capacity > nextLevel.Buckets[i].Capacity) ||
-			(chosenBucket.Capacity == nextLevel.Buckets[i].Capacity && chosenBucket.OrigChannelIndex > nextLevel.Buckets[i].OrigChannelIndex)
+
+	srcLevel := s.levels[levelIndex]
+	bucket := srcLevel.Buckets[bucketIndex]
+	// remove bucket from its current level
+	srcLevel.Buckets = append(srcLevel.Buckets[:bucketIndex], srcLevel.Buckets[bucketIndex+1:]...)
+
+	// add bucket to the correct position in last level
+	lastLevel := s.levels[len(s.levels)-1]
+	i := sort.Search(len(lastLevel.Buckets), func(i int) bool {
+		return (bucket.Capacity > lastLevel.Buckets[i].Capacity) ||
+			(bucket.Capacity == lastLevel.Buckets[i].Capacity && bucket.OrigChannelIndex > lastLevel.Buckets[i].OrigChannelIndex)
 	})
-	nextLevel.Buckets = append(nextLevel.Buckets, &priorityBucket{})
-	copy(nextLevel.Buckets[i+1:], nextLevel.Buckets[i:])
-	nextLevel.Buckets[i] = chosenBucket
-	chosenBucket.LevelIndex = levelIndex + 1
+	lastLevel.Buckets = append(lastLevel.Buckets, &priorityBucket{})
+	copy(lastLevel.Buckets[i+1:], lastLevel.Buckets[i:])
+	lastLevel.Buckets[i] = bucket
+	bucket.LevelIndex = len(s.levels) - 1
+}
+
+func (c *ByFreqRatio) removeEmptyLevel(levelIndex int) {
+	c.levels = append(c.levels[:levelIndex], c.levels[levelIndex+1:]...)
+
+	// Fix level index for all buckets in levels after the removed level
+	for i := levelIndex; i < len(c.levels); i++ {
+		for _, bucket := range c.levels[i].Buckets {
+			bucket.LevelIndex = i
+		}
+	}
 }
