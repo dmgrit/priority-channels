@@ -204,7 +204,7 @@ func TestProcessMessagesByDynamicStrategy(t *testing.T) {
 	cancel()
 }
 
-func TestProcessMessagesByDynamicStrategy_FreqRatioIntegerTypeAssertion(t *testing.T) {
+func TestProcessMessagesByDynamicStrategy_TypeAssertion(t *testing.T) {
 	msgsChannels := make([]chan *Msg, 3)
 	msgsChannels[0] = make(chan *Msg, 5)
 	msgsChannels[1] = make(chan *Msg, 5)
@@ -227,6 +227,12 @@ func TestProcessMessagesByDynamicStrategy_FreqRatioIntegerTypeAssertion(t *testi
 			Strategy:             strategies.NewByHighestAlwaysFirst(),
 			InvalidWeight:        1.3,
 			ExpectedErrorMessage: "channel 'Channel 1': priority must be of type int",
+		},
+		{
+			Name:                 "ByProbability",
+			Strategy:             strategies.NewByProbability(),
+			InvalidWeight:        1,
+			ExpectedErrorMessage: "channel 'Channel 1': probability must be of type float64",
 		},
 		{
 			Name:                 "ByFirstDecimalDigit",

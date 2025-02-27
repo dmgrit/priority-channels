@@ -75,5 +75,88 @@ func TestProcessMessagesByProbability(t *testing.T) {
 				channel.ChannelName(), expectedProbability, actualProbability)
 		}
 	}
+}
 
+func TestByProbabilityPriorityChannelValidation(t *testing.T) {
+	var testCases = []struct {
+		Name                      string
+		ChannelsWithProbabilities []channels.ChannelWithWeight[string, float64]
+		ExpectedErrorMessage      string
+	}{
+		{
+			Name: "Probability less than 0",
+			ChannelsWithProbabilities: []channels.ChannelWithWeight[string, float64]{
+				channels.NewChannelWithWeight(
+					"Channel 1",
+					make(chan string),
+					0.5),
+				channels.NewChannelWithWeight(
+					"Channel 2",
+					make(chan string),
+					-0.5),
+			},
+			ExpectedErrorMessage: "channel 'Channel 2': probability must be between 0 and 1 (exclusive)",
+		},
+		{
+			Name: "Probability equals to 0",
+			ChannelsWithProbabilities: []channels.ChannelWithWeight[string, float64]{
+				channels.NewChannelWithWeight(
+					"Channel 1",
+					make(chan string),
+					0.0),
+				channels.NewChannelWithWeight(
+					"Channel 2",
+					make(chan string),
+					0.5),
+			},
+			ExpectedErrorMessage: "channel 'Channel 1': probability must be between 0 and 1 (exclusive)",
+		},
+		{
+			Name: "Probability equals to 1",
+			ChannelsWithProbabilities: []channels.ChannelWithWeight[string, float64]{
+				channels.NewChannelWithWeight(
+					"Channel 1",
+					make(chan string),
+					1.0),
+				channels.NewChannelWithWeight(
+					"Channel 2",
+					make(chan string),
+					0.5),
+			},
+			ExpectedErrorMessage: "channel 'Channel 1': probability must be between 0 and 1 (exclusive)",
+		},
+		{
+			Name: "Probabilities sum not equal to 1",
+			ChannelsWithProbabilities: []channels.ChannelWithWeight[string, float64]{
+				channels.NewChannelWithWeight(
+					"Channel 1",
+					make(chan string),
+					0.5),
+				channels.NewChannelWithWeight(
+					"Channel 2",
+					make(chan string),
+					0.4),
+			},
+			ExpectedErrorMessage: "sum of probabilities must be 1",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			ctx := context.Background()
+			_, err := priority_channels.NewByStrategy(ctx, strategies.NewByProbability(), tc.ChannelsWithProbabilities)
+			if tc.ExpectedErrorMessage == "" {
+				if err != nil {
+					t.Fatalf("Unexpected validation error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Expected validation error")
+			}
+			if err.Error() != tc.ExpectedErrorMessage {
+				t.Errorf("Expected error %v, but got: %v", tc.ExpectedErrorMessage, err)
+			}
+		})
+	}
 }
