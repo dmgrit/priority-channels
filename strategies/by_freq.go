@@ -113,16 +113,9 @@ func (s *ByFreqRatio) updateStateOnReceivingMessageToBucket(levelIndex int, buck
 }
 
 func (s *ByFreqRatio) moveBucketToLastLevel(levelIndex int, bucketIndex int) {
-	if levelIndex == len(s.levels)-1 {
-		if len(s.levels[levelIndex].Buckets) == 1 {
-			// if this bucket is currently in the last level,
-			// and it is the only one in the level, no need to move it
-			return
-		} else {
-			// the bucket is currently on the last level, and there are other buckets in the level
-			// Add a new level and move the bucket to it
-			s.levels = append(s.levels, &level{})
-		}
+	isNeeded := s.prepareToMovingBucketIfNeeded(levelIndex)
+	if !isNeeded {
+		return
 	}
 
 	srcLevel := s.levels[levelIndex]
@@ -142,12 +135,28 @@ func (s *ByFreqRatio) moveBucketToLastLevel(levelIndex int, bucketIndex int) {
 	bucket.LevelIndex = len(s.levels) - 1
 }
 
-func (c *ByFreqRatio) removeEmptyLevel(levelIndex int) {
-	c.levels = append(c.levels[:levelIndex], c.levels[levelIndex+1:]...)
+func (s *ByFreqRatio) prepareToMovingBucketIfNeeded(levelIndex int) bool {
+	if levelIndex != len(s.levels)-1 {
+		// if bucket is not in the last level, we need to move it
+		return true
+	}
+	if len(s.levels[levelIndex].Buckets) == 1 {
+		// bucket is currently in the last level,
+		// and it is the only one in the level, no need to move it
+		return false
+	}
+	// bucket is currently in the last level, and there are other buckets in the level
+	// Add a new level for adding the bucket to it
+	s.levels = append(s.levels, &level{})
+	return true
+}
+
+func (s *ByFreqRatio) removeEmptyLevel(levelIndex int) {
+	s.levels = append(s.levels[:levelIndex], s.levels[levelIndex+1:]...)
 
 	// Fix level index for all buckets in levels after the removed level
-	for i := levelIndex; i < len(c.levels); i++ {
-		for _, bucket := range c.levels[i].Buckets {
+	for i := levelIndex; i < len(s.levels); i++ {
+		for _, bucket := range s.levels[i].Buckets {
 			bucket.LevelIndex = i
 		}
 	}
