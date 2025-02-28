@@ -3,6 +3,7 @@ package priority_channels_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 	"testing"
 	"time"
@@ -190,6 +191,134 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups(t *testing.T) {
 		if results[i] != expectedResults[i] {
 			t.Errorf("Result %d: Expected message %s, but got %s",
 				i, expectedResults[i], results[i])
+		}
+	}
+}
+
+func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessages(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	payingCustomerHighPriorityFlagshipProductC := make(chan string)
+	payingCustomerHighPriorityNicheProductC := make(chan string)
+	payingCustomerLowPriorityC := make(chan string)
+	freeUserHighPriorityC := make(chan string)
+	freeUserLowPriorityC := make(chan string)
+
+	inputChannels := []chan string{
+		payingCustomerHighPriorityFlagshipProductC,
+		payingCustomerHighPriorityNicheProductC,
+		payingCustomerLowPriorityC,
+		freeUserHighPriorityC,
+		freeUserLowPriorityC,
+	}
+
+	payingCustomerHighPriorityChannel, err := priority_channels.NewByFrequencyRatio[string](ctx, []channels.ChannelWithFreqRatio[string]{
+		channels.NewChannelWithFreqRatio(
+			"Paying Customer - High Priority - Flagship Product",
+			payingCustomerHighPriorityFlagshipProductC,
+			3),
+		channels.NewChannelWithFreqRatio(
+			"Paying Customer - High Priority - Niche Product",
+			payingCustomerHighPriorityNicheProductC,
+			1),
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+	payingCustomerLowPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx,
+		"Paying Customer - Low Priority", payingCustomerLowPriorityC)
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	payingCustomerPriorityChannel, err := priority_channels.CombineByFrequencyRatio[string](ctx, []priority_channels.PriorityChannelWithFreqRatio[string]{
+		priority_channels.NewPriorityChannelWithFreqRatio(
+			"Paying Customer - High Priority",
+			payingCustomerHighPriorityChannel,
+			5),
+		priority_channels.NewPriorityChannelWithFreqRatio(
+			"Paying Customer - Low Priority",
+			payingCustomerLowPriorityChannel,
+			1),
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	freeUserPriorityChannel, err := priority_channels.NewByFrequencyRatio[string](ctx, []channels.ChannelWithFreqRatio[string]{
+		channels.NewChannelWithFreqRatio(
+			"Free User - High Priority",
+			freeUserHighPriorityC,
+			3),
+		channels.NewChannelWithFreqRatio(
+			"Free User - Low Priority",
+			freeUserLowPriorityC,
+			1),
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	channelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
+		priority_channels.NewPriorityChannelWithFreqRatio("Paying Customer",
+			payingCustomerPriorityChannel,
+			6),
+		priority_channels.NewPriorityChannelWithFreqRatio("Free User",
+			freeUserPriorityChannel,
+			4),
+	}
+
+	expectedRatios := map[string]float64{
+		"Paying Customer - High Priority - Flagship Product": 0.375,
+		"Paying Customer - High Priority - Niche Product":    0.125,
+		"Paying Customer - Low Priority":                     0.1,
+		"Free User - High Priority":                          0.3,
+		"Free User - Low Priority":                           0.1,
+	}
+	messagesNum := 10000
+
+	for i := range inputChannels {
+		go func(i int) {
+			for j := 1; j <= messagesNum; j++ {
+				select {
+				case <-ctx.Done():
+					return
+				case inputChannels[i] <- fmt.Sprintf("Message %d", i):
+				}
+			}
+		}(i)
+	}
+
+	ch, err := priority_channels.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio)
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	totalCount := 0
+	countPerChannel := make(map[string]int)
+	go func() {
+		for {
+			_, channel, ok := ch.Receive()
+			if !ok {
+				return
+			}
+			totalCount++
+			countPerChannel[channel] = countPerChannel[channel] + 1
+			if totalCount == messagesNum {
+				cancel()
+				return
+			}
+		}
+	}()
+
+	<-ctx.Done()
+
+	for channelName := range expectedRatios {
+		expectedRatio := expectedRatios[channelName]
+		actualRatio := float64(countPerChannel[channelName]) / float64(totalCount)
+		if math.Abs(expectedRatio-actualRatio) > 0.03 {
+			t.Errorf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
+				channelName, expectedRatio, actualRatio)
 		}
 	}
 }
