@@ -11,10 +11,14 @@ type ByFreqRatio struct {
 	channelName       string
 	levels            []*level
 	origIndexToBucket map[int]*priorityBucket
+	disabledCases     map[int]int
 }
 
 func NewByFreqRatio() *ByFreqRatio {
-	return &ByFreqRatio{}
+	return &ByFreqRatio{
+		origIndexToBucket: make(map[int]*priorityBucket),
+		disabledCases:     make(map[int]int),
+	}
 }
 
 func byFreqPriorityBucketsSortingFunc(b1, b2 *priorityBucket) bool {
@@ -25,7 +29,6 @@ func byFreqPriorityBucketsSortingFunc(b1, b2 *priorityBucket) bool {
 func (s *ByFreqRatio) Initialize(freqRatios []int) error {
 	zeroLevel := &level{}
 	zeroLevel.Buckets = make([]*priorityBucket, 0, len(freqRatios))
-	s.origIndexToBucket = make(map[int]*priorityBucket)
 	for i, freqRatio := range freqRatios {
 		if freqRatio <= 0 {
 			return &WeightValidationError{
@@ -84,6 +87,28 @@ func (s *ByFreqRatio) UpdateOnCaseSelected(index int) {
 	s.updateStateOnReceivingMessageToBucket(bucket.LevelIndex, bucketIndex)
 }
 
+func (s *ByFreqRatio) DisableSelectCase(index int) {
+	if _, ok := s.disabledCases[index]; ok {
+		return
+	}
+	bucket, ok := s.origIndexToBucket[index]
+	if !ok {
+		return
+	}
+	levelBuckets := s.levels[bucket.LevelIndex].Buckets
+	bucketIndex := sort.Search(len(levelBuckets), func(i int) bool {
+		return (bucket.Capacity > levelBuckets[i].Capacity) ||
+			(bucket.Capacity == levelBuckets[i].Capacity && bucket.OrigChannelIndex >= levelBuckets[i].OrigChannelIndex)
+	})
+	if bucketIndex == len(levelBuckets) || levelBuckets[bucketIndex].OrigChannelIndex != index {
+		// This should not happen
+		return
+	}
+	s.removeBucket(bucket.LevelIndex, bucketIndex)
+	delete(s.origIndexToBucket, index)
+	s.disabledCases[index] = bucket.Capacity
+}
+
 type priorityBucket struct {
 	Value            int
 	Capacity         int
@@ -124,15 +149,19 @@ func (s *ByFreqRatio) moveBucketToLastLevel(levelIndex int, bucketIndex int) {
 	srcLevel.Buckets = append(srcLevel.Buckets[:bucketIndex], srcLevel.Buckets[bucketIndex+1:]...)
 
 	// add bucket to the correct position in last level
-	lastLevel := s.levels[len(s.levels)-1]
-	i := sort.Search(len(lastLevel.Buckets), func(i int) bool {
-		return (bucket.Capacity > lastLevel.Buckets[i].Capacity) ||
-			(bucket.Capacity == lastLevel.Buckets[i].Capacity && bucket.OrigChannelIndex > lastLevel.Buckets[i].OrigChannelIndex)
+	s.addBucketToLevel(bucket, len(s.levels)-1)
+}
+
+func (s *ByFreqRatio) addBucketToLevel(bucket *priorityBucket, levelIndex int) {
+	dstLevel := s.levels[levelIndex]
+	i := sort.Search(len(dstLevel.Buckets), func(i int) bool {
+		return (bucket.Capacity > dstLevel.Buckets[i].Capacity) ||
+			(bucket.Capacity == dstLevel.Buckets[i].Capacity && bucket.OrigChannelIndex > dstLevel.Buckets[i].OrigChannelIndex)
 	})
-	lastLevel.Buckets = append(lastLevel.Buckets, &priorityBucket{})
-	copy(lastLevel.Buckets[i+1:], lastLevel.Buckets[i:])
-	lastLevel.Buckets[i] = bucket
-	bucket.LevelIndex = len(s.levels) - 1
+	dstLevel.Buckets = append(dstLevel.Buckets, &priorityBucket{})
+	copy(dstLevel.Buckets[i+1:], dstLevel.Buckets[i:])
+	dstLevel.Buckets[i] = bucket
+	bucket.LevelIndex = levelIndex
 }
 
 func (s *ByFreqRatio) prepareToMovingBucketIfNeeded(levelIndex int) bool {
@@ -160,4 +189,18 @@ func (s *ByFreqRatio) removeEmptyLevel(levelIndex int) {
 			bucket.LevelIndex = i
 		}
 	}
+}
+
+func (c *ByFreqRatio) removeBucket(levelIndex int, bucketIndex int) {
+	chosenBucket := c.levels[levelIndex].Buckets[bucketIndex]
+	if len(c.levels[levelIndex].Buckets) == 1 {
+		c.removeEmptyLevel(levelIndex)
+	} else {
+		// remove bucket in level
+		c.levels[levelIndex].Buckets = append(
+			c.levels[levelIndex].Buckets[:bucketIndex],
+			c.levels[levelIndex].Buckets[bucketIndex+1:]...)
+	}
+	chosenBucket.LevelIndex = -1
+	chosenBucket.Value = 0
 }

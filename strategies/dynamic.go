@@ -25,6 +25,7 @@ type DynamicSubStrategy interface {
 	InitializeWithTypeAssertion(weights []interface{}) error
 	NextSelectCasesIndexes(upto int) []int
 	UpdateOnCaseSelected(index int)
+	DisableSelectCase(index int)
 }
 
 type Dynamic struct {
@@ -97,4 +98,10 @@ func (s *Dynamic) NextSelectCasesIndexes(upto int) []int {
 func (s *Dynamic) UpdateOnCaseSelected(index int) {
 	strategy := s.strategiesByName[s.currentStrategyName]
 	strategy.UpdateOnCaseSelected(index)
+}
+
+func (s *Dynamic) DisableSelectCase(index int) {
+	for _, s := range s.strategiesByName {
+		s.DisableSelectCase(index)
+	}
 }

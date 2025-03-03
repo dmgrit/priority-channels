@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/dmgrit/priority-channels"
 	"github.com/dmgrit/priority-channels/channels"
@@ -74,6 +75,83 @@ func TestProcessMessagesByProbability(t *testing.T) {
 			t.Errorf("Channel %s: expected messages number by probability %.2f, got %.2f\n",
 				channel.ChannelName(), expectedProbability, actualProbability)
 		}
+	}
+}
+
+func TestProcessMessagesByProbability_AutoDisableClosedChannels(t *testing.T) {
+	ctx := context.Background()
+
+	urgentMessagesC := make(chan string)
+	highPriorityC := make(chan string)
+	normalPriorityC := make(chan string)
+	lowPriorityC := make(chan string)
+
+	// sending messages to individual channels
+	go func() {
+		for i := 1; i <= 50; i++ {
+			highPriorityC <- fmt.Sprintf("high priority message %d", i)
+		}
+		close(highPriorityC)
+	}()
+	go func() {
+		for i := 1; i <= 50; i++ {
+			normalPriorityC <- fmt.Sprintf("normal priority message %d", i)
+		}
+		close(normalPriorityC)
+	}()
+	go func() {
+		for i := 1; i <= 50; i++ {
+			lowPriorityC <- fmt.Sprintf("low priority message %d", i)
+		}
+		close(lowPriorityC)
+	}()
+	go func() {
+		for i := 1; i <= 50; i++ {
+			urgentMessagesC <- fmt.Sprintf("urgent message %d", i)
+		}
+		close(urgentMessagesC)
+	}()
+
+	channelsWithProbability := []channels.ChannelWithWeight[string, float64]{
+		channels.NewChannelWithWeight[string, float64](
+			"High Priority",
+			highPriorityC,
+			0.3),
+		channels.NewChannelWithWeight(
+			"Normal Priority",
+			normalPriorityC,
+			0.2),
+		channels.NewChannelWithWeight(
+			"Low Priority",
+			lowPriorityC,
+			0.1),
+		channels.NewChannelWithWeight(
+			"Urgent Messages",
+			urgentMessagesC,
+			0.4),
+	}
+	ch, err := priority_channels.NewByStrategy(ctx, strategies.NewByProbability(), channelsWithProbability,
+		priority_channels.AutoDisableClosedChannels())
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	receivedMessagesCount := 0
+	for {
+		message, channelName, status := ch.ReceiveWithContext(context.Background())
+		if status != priority_channels.ReceiveSuccess {
+			if receivedMessagesCount != 200 {
+				t.Errorf("Expected to receive 200 messages, but got %d", receivedMessagesCount)
+			}
+			if status != priority_channels.ReceiveNoOpenChannels {
+				t.Errorf("Expected to receive 'no open channels' status on closure (%v), but got %v",
+					priority_channels.ReceiveNoOpenChannels, status)
+			}
+			break
+		}
+		receivedMessagesCount++
+		fmt.Printf("%s: %s\n", channelName, message)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

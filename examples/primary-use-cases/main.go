@@ -78,15 +78,20 @@ func main() {
 		}
 	}
 
+	var options []func(*priority_channels.PriorityChannelOptions)
+	if len(os.Args) > 1 && os.Args[1] == "-a" {
+		options = append(options, priority_channels.AutoDisableClosedChannels())
+	}
+
 	var ch *priority_channels.PriorityChannel[string]
 	var err error
 
 	if isByFrequencyRatio {
-		ch, err = priority_channels.NewByFrequencyRatio(ctx, channelsWithFreqRatio)
+		ch, err = priority_channels.NewByFrequencyRatio(ctx, channelsWithFreqRatio, options...)
 	} else if isByHighestAlwaysFirst {
-		ch, err = priority_channels.NewByHighestAlwaysFirst(ctx, channelsWithPriority)
+		ch, err = priority_channels.NewByHighestAlwaysFirst(ctx, channelsWithPriority, options...)
 	} else {
-		ch, err = priority_channels.NewByStrategy(ctx, strategies.NewByProbability(), channelsWithProbability)
+		ch, err = priority_channels.NewByStrategy(ctx, strategies.NewByProbability(), channelsWithProbability, options...)
 	}
 	if err != nil {
 		fmt.Printf("Failed to create priority channel: %v\n", err)
@@ -112,7 +117,7 @@ func main() {
 						resumeEnabled = false
 					}
 				case b := <-triggerPauseOrCloseChannels[i-1]:
-					if b {
+					if b && !closed {
 						close(inputChannels[i-1])
 						closed = true
 					}
@@ -121,7 +126,7 @@ func main() {
 					if !paused && !closed {
 						select {
 						case b := <-triggerPauseOrCloseChannels[i-1]:
-							if b {
+							if b && !closed {
 								close(inputChannels[i-1])
 								closed = true
 							}
@@ -212,6 +217,13 @@ func main() {
 				} else {
 					_, err = f.WriteString(fmt.Sprintf("Priority Channel '%s' is closed\n", channel))
 				}
+				if err != nil {
+					fmt.Printf("Failed to write to file: %v\n", err)
+					cancel()
+					break
+				}
+			} else if status == priority_channels.ReceiveNoOpenChannels {
+				_, err := f.WriteString("No open channels left\n")
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)
 					cancel()

@@ -183,6 +183,83 @@ func TestProcessMessagesByFrequencyRatio_TenThousandMessages(t *testing.T) {
 	}
 }
 
+func TestProcessMessagesByFrequencyRatio_AutoDisableClosedChannels(t *testing.T) {
+	ctx := context.Background()
+
+	urgentMessagesC := make(chan string)
+	highPriorityC := make(chan string)
+	normalPriorityC := make(chan string)
+	lowPriorityC := make(chan string)
+
+	// sending messages to individual channels
+	go func() {
+		for i := 1; i <= 50; i++ {
+			highPriorityC <- fmt.Sprintf("high priority message %d", i)
+		}
+		close(highPriorityC)
+	}()
+	go func() {
+		for i := 1; i <= 50; i++ {
+			normalPriorityC <- fmt.Sprintf("normal priority message %d", i)
+		}
+		close(normalPriorityC)
+	}()
+	go func() {
+		for i := 1; i <= 50; i++ {
+			lowPriorityC <- fmt.Sprintf("low priority message %d", i)
+		}
+		close(lowPriorityC)
+	}()
+	go func() {
+		for i := 1; i <= 50; i++ {
+			urgentMessagesC <- fmt.Sprintf("urgent message %d", i)
+		}
+		close(urgentMessagesC)
+	}()
+
+	channelsWithFreqRatio := []channels.ChannelWithFreqRatio[string]{
+		channels.NewChannelWithFreqRatio(
+			"High Priority",
+			highPriorityC,
+			8),
+		channels.NewChannelWithFreqRatio(
+			"Normal Priority",
+			normalPriorityC,
+			5),
+		channels.NewChannelWithFreqRatio(
+			"Low Priority",
+			lowPriorityC,
+			3),
+		channels.NewChannelWithFreqRatio(
+			"Urgent Messages",
+			urgentMessagesC,
+			10),
+	}
+	ch, err := pc.NewByFrequencyRatio(ctx, channelsWithFreqRatio,
+		pc.AutoDisableClosedChannels())
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	receivedMessagesCount := 0
+	for {
+		message, channelName, status := ch.ReceiveWithContext(context.Background())
+		if status != pc.ReceiveSuccess {
+			if receivedMessagesCount != 200 {
+				t.Errorf("Expected to receive 200 messages, but got %d", receivedMessagesCount)
+			}
+			if status != pc.ReceiveNoOpenChannels {
+				t.Errorf("Expected to receive 'no open channels' status on closure (%v), but got %v",
+					pc.ReceiveNoOpenChannels, status)
+			}
+			break
+		}
+		receivedMessagesCount++
+		fmt.Printf("%s: %s\n", channelName, message)
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestProcessMessagesByFrequencyRatio_MessagesInOneOfTheChannelsArriveAfterSomeTime(t *testing.T) {
 	msgsChannels := make([]chan *Msg, 3)
 	msgsChannels[0] = make(chan *Msg, 7)

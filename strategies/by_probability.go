@@ -15,6 +15,8 @@ type ByProbability struct {
 	pendingProbabilities          []probabilitySelection
 	pendingProbabilitiesInitState []probabilitySelection
 	currSelectedIndexes           []int
+	origProbabilities             []float64
+	disabledCases                 map[int]float64
 }
 
 type probabilitySelection struct {
@@ -24,11 +26,14 @@ type probabilitySelection struct {
 }
 
 func NewByProbability() *ByProbability {
-	return &ByProbability{}
+	return &ByProbability{
+		disabledCases: make(map[int]float64),
+	}
 }
 
 func (s *ByProbability) Initialize(probabilities []float64) error {
 	s.pendingProbabilities = make([]probabilitySelection, 0, len(probabilities))
+	s.origProbabilities = make([]float64, 0, len(probabilities))
 
 	probSum := 0.0
 	for i, p := range probabilities {
@@ -43,6 +48,7 @@ func (s *ByProbability) Initialize(probabilities []float64) error {
 			Probability:   p,
 			OriginalIndex: i,
 		})
+		s.origProbabilities = append(s.origProbabilities, p)
 	}
 	if probSum != 1.0 {
 		return ErrProbabilitiesMustSumToOne
@@ -84,7 +90,7 @@ func (s *ByProbability) NextSelectCasesIndexes(upto int) []int {
 		}
 		s.currSelectedIndexes = append(s.currSelectedIndexes, s.pendingProbabilities[i].OriginalIndex)
 		s.pendingProbabilities = append(s.pendingProbabilities[:i], s.pendingProbabilities[i+1:]...)
-		s.readjustPendingProbabilities()
+		s.readjustSortedProbabilitySelectionsList(s.pendingProbabilities)
 	}
 
 	res := make([]int, 0, upto)
@@ -95,6 +101,30 @@ func (s *ByProbability) NextSelectCasesIndexes(upto int) []int {
 }
 
 func (s *ByProbability) UpdateOnCaseSelected(index int) {
+	s.resetSelectionState()
+}
+
+func (s *ByProbability) DisableSelectCase(index int) {
+	if _, ok := s.disabledCases[index]; ok {
+		return
+	}
+	probability := s.origProbabilities[index]
+	spIndex := sort.Search(len(s.pendingProbabilitiesInitState), func(i int) bool {
+		pp := s.pendingProbabilitiesInitState[i]
+		return (probability > pp.Probability) ||
+			(probability == pp.Probability && index >= pp.OriginalIndex)
+	})
+	if spIndex == len(s.pendingProbabilitiesInitState) || s.pendingProbabilitiesInitState[spIndex].OriginalIndex != index {
+		// this should never happen
+		return
+	}
+	s.pendingProbabilitiesInitState = append(s.pendingProbabilitiesInitState[:spIndex], s.pendingProbabilitiesInitState[spIndex+1:]...)
+	s.disabledCases[index] = probability
+	s.readjustSortedProbabilitySelectionsList(s.pendingProbabilitiesInitState)
+	s.resetSelectionState()
+}
+
+func (s *ByProbability) resetSelectionState() {
 	s.currSelectedIndexes = nil
 	s.pendingProbabilities = make([]probabilitySelection, 0, len(s.pendingProbabilitiesInitState))
 	for _, p := range s.pendingProbabilitiesInitState {
@@ -102,20 +132,19 @@ func (s *ByProbability) UpdateOnCaseSelected(index int) {
 	}
 }
 
-func (s *ByProbability) readjustPendingProbabilities() {
-	if len(s.pendingProbabilities) == 0 {
+func (s *ByProbability) readjustSortedProbabilitySelectionsList(list []probabilitySelection) {
+	if len(list) == 0 {
 		return
 	}
-
 	sum := 0.0
-	for _, p := range s.pendingProbabilities {
+	for _, p := range list {
 		sum += p.Probability
 	}
 	adjustedSum := 0.0
-	for i := range s.pendingProbabilities {
-		adjustedSum += s.pendingProbabilities[i].Probability / sum
-		s.pendingProbabilities[i].AdjustedValue = adjustedSum
+	for i := range list {
+		adjustedSum += list[i].Probability / sum
+		list[i].AdjustedValue = adjustedSum
 	}
 	// Adjust last value to 1.0 to avoid floating point errors
-	s.pendingProbabilities[len(s.pendingProbabilities)-1].AdjustedValue = 1.0
+	list[len(list)-1].AdjustedValue = 1.0
 }

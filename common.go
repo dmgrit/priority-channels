@@ -13,6 +13,7 @@ const (
 	ReceiveChannelClosed
 	ReceiveDefaultCase
 	ReceivePriorityChannelCancelled
+	ReceiveNoOpenChannels
 	ReceiveStatusUnknown
 )
 
@@ -37,6 +38,7 @@ const (
 
 type PriorityChannelOptions struct {
 	channelReceiveWaitInterval *time.Duration
+	autoDisableClosedChannels  bool
 }
 
 const defaultChannelReceiveWaitInterval = 100 * time.Microsecond
@@ -44,6 +46,12 @@ const defaultChannelReceiveWaitInterval = 100 * time.Microsecond
 func ChannelWaitInterval(d time.Duration) func(opt *PriorityChannelOptions) {
 	return func(opt *PriorityChannelOptions) {
 		opt.channelReceiveWaitInterval = &d
+	}
+}
+
+func AutoDisableClosedChannels() func(opt *PriorityChannelOptions) {
+	return func(opt *PriorityChannelOptions) {
+		opt.autoDisableClosedChannels = true
 	}
 }
 

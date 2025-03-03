@@ -323,6 +323,116 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessag
 	}
 }
 
+func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_AutoDisableClosedChannels(t *testing.T) {
+	ctx := context.Background()
+
+	payingCustomerHighPriorityFlagshipProductC := make(chan string)
+	payingCustomerHighPriorityNicheProductC := make(chan string)
+	payingCustomerLowPriorityC := make(chan string)
+	freeUserHighPriorityC := make(chan string)
+	freeUserLowPriorityC := make(chan string)
+
+	inputChannels := []chan string{
+		payingCustomerHighPriorityFlagshipProductC,
+		payingCustomerHighPriorityNicheProductC,
+		payingCustomerLowPriorityC,
+		freeUserHighPriorityC,
+		freeUserLowPriorityC,
+	}
+
+	for i := range inputChannels {
+		go func(i int) {
+			for j := 1; j <= 50; j++ {
+				inputChannels[i] <- fmt.Sprintf("message %d", j)
+			}
+			close(inputChannels[i])
+		}(i)
+	}
+
+	options := []func(*priority_channels.PriorityChannelOptions){
+		priority_channels.AutoDisableClosedChannels(),
+	}
+	payingCustomerHighPriorityChannel, err := priority_channels.NewByFrequencyRatio[string](ctx, []channels.ChannelWithFreqRatio[string]{
+		channels.NewChannelWithFreqRatio(
+			"Paying Customer - High Priority - Flagship Product",
+			payingCustomerHighPriorityFlagshipProductC,
+			3),
+		channels.NewChannelWithFreqRatio(
+			"Paying Customer - High Priority - Niche Product",
+			payingCustomerHighPriorityNicheProductC,
+			1),
+	}, options...)
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+	payingCustomerLowPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx,
+		"Paying Customer - Low Priority", payingCustomerLowPriorityC)
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	payingCustomerPriorityChannel, err := priority_channels.CombineByFrequencyRatio[string](ctx, []priority_channels.PriorityChannelWithFreqRatio[string]{
+		priority_channels.NewPriorityChannelWithFreqRatio(
+			"Paying Customer - High Priority",
+			payingCustomerHighPriorityChannel,
+			5),
+		priority_channels.NewPriorityChannelWithFreqRatio(
+			"Paying Customer - Low Priority",
+			payingCustomerLowPriorityChannel,
+			1),
+	}, options...)
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	freeUserPriorityChannel, err := priority_channels.NewByFrequencyRatio[string](ctx, []channels.ChannelWithFreqRatio[string]{
+		channels.NewChannelWithFreqRatio(
+			"Free User - High Priority",
+			freeUserHighPriorityC,
+			3),
+		channels.NewChannelWithFreqRatio(
+			"Free User - Low Priority",
+			freeUserLowPriorityC,
+			1),
+	}, options...)
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	channelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
+		priority_channels.NewPriorityChannelWithFreqRatio("Paying Customer",
+			payingCustomerPriorityChannel,
+			6),
+		priority_channels.NewPriorityChannelWithFreqRatio("Free User",
+			freeUserPriorityChannel,
+			4),
+	}
+
+	ch, err := priority_channels.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio,
+		priority_channels.AutoDisableClosedChannels())
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	receivedMessagesCount := 0
+	for {
+		message, channelName, status := ch.ReceiveWithContext(context.Background())
+		if status != priority_channels.ReceiveSuccess {
+			if receivedMessagesCount != 250 {
+				t.Errorf("Expected to receive 250 messages, but got %d", receivedMessagesCount)
+			}
+			if status != priority_channels.ReceiveNoOpenChannels {
+				t.Errorf("Expected to receive 'no open channels' status on closure (%v), but got %v",
+					priority_channels.ReceiveNoOpenChannels, status)
+			}
+			break
+		}
+		receivedMessagesCount++
+		fmt.Printf("%s: %s\n", channelName, message)
+		//time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestProcessMessagesScenario(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 

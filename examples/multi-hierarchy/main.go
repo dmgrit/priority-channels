@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,13 +18,19 @@ func main() {
 
 	var inputChannels []chan string
 	var triggerPauseChannels []chan bool
+	var triggerCloseChannels []chan bool
 
 	channelsNum := 5
 	for i := 1; i <= channelsNum; i++ {
 		inputChannels = append(inputChannels, make(chan string))
 		triggerPauseChannels = append(triggerPauseChannels, make(chan bool))
+		triggerCloseChannels = append(triggerCloseChannels, make(chan bool))
 	}
 
+	var options []func(*priority_channels.PriorityChannelOptions)
+	if len(os.Args) > 1 && os.Args[1] == "-a" {
+		options = append(options, priority_channels.AutoDisableClosedChannels())
+	}
 	customerAPriorityChannel, err := priority_channels.NewByFrequencyRatio[string](ctx, []channels.ChannelWithFreqRatio[string]{
 		channels.NewChannelWithFreqRatio(
 			"Customer A - High Priority",
@@ -33,7 +40,7 @@ func main() {
 			"Customer A - Low Priority",
 			inputChannels[1],
 			1),
-	})
+	}, options...)
 	if err != nil {
 		fmt.Printf("Unexpected error on priority channel intialization: %v\n", err)
 		return
@@ -48,7 +55,7 @@ func main() {
 			"Customer B - Low Priority",
 			inputChannels[3],
 			1),
-	})
+	}, options...)
 	if err != nil {
 		fmt.Printf("Unexpected error on priority channel intialization: %v\n", err)
 		return
@@ -63,13 +70,13 @@ func main() {
 			1),
 	}
 
-	combinedUsersAndMessageTypesPriorityChannel, err := priority_channels.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio)
+	combinedUsersAndMessageTypesPriorityChannel, err := priority_channels.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio, options...)
 	if err != nil {
 		fmt.Printf("Unexpected error on priority channel intialization: %v\n", err)
 		return
 	}
 
-	urgentMessagesPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx, "Urgent Messages", inputChannels[4])
+	urgentMessagesPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx, "Urgent Messages", inputChannels[4], options...)
 	if err != nil {
 		fmt.Printf("failed to create urgent message priority channel: %v\n", err)
 	}
@@ -83,7 +90,7 @@ func main() {
 			"Urgent Messages",
 			urgentMessagesPriorityChannel,
 			100),
-	})
+	}, options...)
 
 	fmt.Printf("Multi-Hierarchy Demo:\n")
 	fmt.Printf("- Press 'A/NA' to start/stop receiving messages from Customer A\n")
@@ -96,15 +103,26 @@ func main() {
 	for i := 1; i <= len(inputChannels); i++ {
 		go func(i int) {
 			paused := true
+			closed := false
 			for {
 				select {
 				case b := <-triggerPauseChannels[i-1]:
 					paused = !b
+				case b := <-triggerCloseChannels[i-1]:
+					if b && !closed {
+						close(inputChannels[i-1])
+						closed = true
+					}
 				default:
-					if !paused {
+					if !paused && !closed {
 						select {
 						case b := <-triggerPauseChannels[i-1]:
 							paused = !b
+						case b := <-triggerCloseChannels[i-1]:
+							if b && !closed {
+								close(inputChannels[i-1])
+								closed = true
+							}
 						case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
 						}
 					} else {
@@ -163,6 +181,13 @@ func main() {
 					cancel()
 					break
 				}
+			} else if status == priority_channels.ReceiveNoOpenChannels {
+				_, err := f.WriteString("No open channels left\n")
+				if err != nil {
+					fmt.Printf("Failed to write to file: %v\n", err)
+					cancel()
+					break
+				}
 			} else {
 				_, err := f.WriteString(fmt.Sprintf("Unexpected status %s\n", channel))
 				if err != nil {
@@ -198,6 +223,17 @@ func main() {
 		if !value {
 			operation = "Stopped"
 		}
+		if strings.HasPrefix(upperLine, "C") {
+			upperLine = strings.TrimPrefix(upperLine, "C")
+			number, err := strconv.Atoi(upperLine)
+			if err != nil || number < 0 || number > channelsNum {
+				continue
+			}
+			fmt.Printf("Closing Channel %d\n", number)
+			triggerCloseChannels[number-1] <- value
+			continue
+		}
+
 		switch upperLine {
 		case "A", "NA":
 			triggerPauseChannels[0] <- value

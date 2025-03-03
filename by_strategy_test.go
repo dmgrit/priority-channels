@@ -354,3 +354,7 @@ func (s *byFirstDecimalDigit) NextSelectCasesIndexes(upto int) []int {
 }
 
 func (s *byFirstDecimalDigit) UpdateOnCaseSelected(index int) {}
+
+func (s *byFirstDecimalDigit) DisableSelectCase(index int) {
+	// to be implemented
+}

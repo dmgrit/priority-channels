@@ -28,7 +28,7 @@ func (c *channelWithWeight[T, W]) NextSelectCases(upto int) ([]SelectCase[T], bo
 	}, true, nil
 }
 
-func (c *channelWithWeight[T, W]) UpdateOnCaseSelected(pathInTree []ChannelNode) {}
+func (c *channelWithWeight[T, W]) UpdateOnCaseSelected(pathInTree []ChannelNode, recvOK bool) {}
 
 func (c *channelWithWeight[T, W]) Weight() W {
 	return c.weight

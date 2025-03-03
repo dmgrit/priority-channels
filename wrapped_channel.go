@@ -15,21 +15,20 @@ func WrapAsPriorityChannel[T any](ctx context.Context, channelName string, msgsC
 		option(pcOptions)
 	}
 	compositeChannel := &wrappedChannel[T]{
-		ctx:         ctx,
-		channelName: channelName,
-		msgsC:       msgsC,
-	}
-	return &PriorityChannel[T]{
 		ctx:                        ctx,
-		compositeChannel:           compositeChannel,
-		channelReceiveWaitInterval: pcOptions.channelReceiveWaitInterval,
-	}, nil
+		channelName:                channelName,
+		msgsC:                      msgsC,
+		autoDisableOnClosedChannel: pcOptions.autoDisableClosedChannels,
+	}
+	return newPriorityChannel(ctx, compositeChannel, options...), nil
 }
 
 type wrappedChannel[T any] struct {
-	ctx         context.Context
-	channelName string
-	msgsC       <-chan T
+	ctx                        context.Context
+	channelName                string
+	msgsC                      <-chan T
+	autoDisableOnClosedChannel bool
+	disabled                   bool
 }
 
 func (w *wrappedChannel[T]) ChannelName() string {
@@ -40,10 +39,13 @@ func (w *wrappedChannel[T]) NextSelectCases(upto int) (selectCases []selectable.
 	select {
 	case <-w.ctx.Done():
 		return nil, true, &selectable.ClosedChannelDetails{
-			ChannelName: w.channelName,
+			ChannelName: "",
 			PathInTree:  nil,
 		}
 	default:
+		if w.disabled {
+			return nil, true, nil
+		}
 		return []selectable.SelectCase[T]{
 			{
 				ChannelName: w.channelName,
@@ -53,4 +55,15 @@ func (w *wrappedChannel[T]) NextSelectCases(upto int) (selectCases []selectable.
 	}
 }
 
-func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode) {}
+func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode, recvOK bool) {
+	if !recvOK && c.autoDisableOnClosedChannel {
+		c.disabled = true
+	}
+}
+
+func (c *wrappedChannel[T]) Validate() error {
+	if c.channelName == "" {
+		return ErrEmptyChannelName
+	}
+	return nil
+}
