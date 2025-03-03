@@ -345,12 +345,12 @@ func (s *byFirstDecimalDigit) InitializeWithTypeAssertion(priorities []interface
 	return s.Initialize(prioritiesFloat64)
 }
 
-func (s *byFirstDecimalDigit) NextSelectCasesIndexes(upto int) []int {
+func (s *byFirstDecimalDigit) NextSelectCasesIndexes(upto int) ([]int, bool) {
 	res := make([]int, 0, upto)
 	for i := 0; i < upto && i < len(s.sortedPriorities); i++ {
 		res = append(res, s.sortedPriorities[i].OriginalIndex)
 	}
-	return res
+	return res, len(res) == len(s.sortedPriorities)
 }
 
 func (s *byFirstDecimalDigit) UpdateOnCaseSelected(index int) {}

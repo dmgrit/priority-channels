@@ -56,12 +56,12 @@ func (s *HighestAlwaysFirst) InitializeWithTypeAssertion(priorities []interface{
 	return s.Initialize(prioritiesInt)
 }
 
-func (s *HighestAlwaysFirst) NextSelectCasesIndexes(upto int) []int {
+func (s *HighestAlwaysFirst) NextSelectCasesIndexes(upto int) ([]int, bool) {
 	res := make([]int, 0, upto)
 	for i := 0; i < upto && i < len(s.sortedPriorities); i++ {
 		res = append(res, s.sortedPriorities[i].OriginalIndex)
 	}
-	return res
+	return res, len(res) == len(s.sortedPriorities)
 }
 
 func (s *HighestAlwaysFirst) UpdateOnCaseSelected(index int) {}

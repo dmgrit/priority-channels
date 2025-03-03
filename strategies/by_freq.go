@@ -60,17 +60,17 @@ func (s *ByFreqRatio) InitializeWithTypeAssertion(freqRatios []interface{}) erro
 	return s.Initialize(freqRatiosInt)
 }
 
-func (s *ByFreqRatio) NextSelectCasesIndexes(upto int) []int {
+func (s *ByFreqRatio) NextSelectCasesIndexes(upto int) ([]int, bool) {
 	res := make([]int, 0, upto)
-	for _, level := range s.levels {
-		for _, b := range level.Buckets {
+	for i, level := range s.levels {
+		for j, b := range level.Buckets {
 			res = append(res, b.OrigChannelIndex)
 			if len(res) == upto {
-				return res
+				return res, i == len(s.levels)-1 && j == len(level.Buckets)-1
 			}
 		}
 	}
-	return res
+	return res, true
 }
 
 func (s *ByFreqRatio) UpdateOnCaseSelected(index int) {

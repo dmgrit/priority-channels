@@ -79,7 +79,7 @@ func (s *ByProbability) InitializeWithTypeAssertion(probabilities []interface{})
 	return s.Initialize(probabilitiesFloat64)
 }
 
-func (s *ByProbability) NextSelectCasesIndexes(upto int) []int {
+func (s *ByProbability) NextSelectCasesIndexes(upto int) ([]int, bool) {
 	if len(s.pendingProbabilities) > 0 {
 		i := 0
 		if len(s.pendingProbabilities) > 1 {
@@ -97,7 +97,7 @@ func (s *ByProbability) NextSelectCasesIndexes(upto int) []int {
 	for i := 0; i < upto && i < len(s.currSelectedIndexes); i++ {
 		res = append(res, s.currSelectedIndexes[i])
 	}
-	return res
+	return res, len(s.pendingProbabilities) == 0 && len(res) == len(s.currSelectedIndexes)
 }
 
 func (s *ByProbability) UpdateOnCaseSelected(index int) {

@@ -20,7 +20,7 @@ func NewByStrategy[T any, W any](ctx context.Context,
 
 type PrioritizationStrategy[W any] interface {
 	Initialize(weights []W) error
-	NextSelectCasesIndexes(upto int) []int
+	NextSelectCasesIndexes(upto int) ([]int, bool)
 	UpdateOnCaseSelected(index int)
 	DisableSelectCase(index int)
 }
@@ -81,14 +81,11 @@ func (c *compositeChannelByPrioritization[T, W]) ChannelName() string {
 func (c *compositeChannelByPrioritization[T, W]) NextSelectCases(upto int) ([]selectable.SelectCase[T], bool, *selectable.ClosedChannelDetails) {
 	added := 0
 	var selectCases []selectable.SelectCase[T]
-	areAllCasesAdded := false
-	nextSelectCasesIndexes := c.strategy.NextSelectCasesIndexes(upto)
-	if len(nextSelectCasesIndexes) == 0 && upto == len(c.channels) {
-		return nil, true, nil
-	}
+	nextSelectCasesIndexes, areAllDirectChannelsSelected := c.strategy.NextSelectCasesIndexes(upto)
+	areAllCasesAddedSoFar := areAllDirectChannelsSelected
 
 	for i, channelIndex := range nextSelectCasesIndexes {
-		channelSelectCases, allSelected, closedChannel := c.channels[channelIndex].NextSelectCases(upto - added)
+		currChannelSelectCases, allCurrDescendantsSelected, closedChannel := c.channels[channelIndex].NextSelectCases(upto - added)
 		if closedChannel != nil {
 			return nil, true, &selectable.ClosedChannelDetails{
 				ChannelName: closedChannel.ChannelName,
@@ -98,10 +95,7 @@ func (c *compositeChannelByPrioritization[T, W]) NextSelectCases(upto int) ([]se
 				}),
 			}
 		}
-		if len(channelSelectCases) == 0 && (i == len(c.channels)-1) {
-			return selectCases, true, nil
-		}
-		for _, sc := range channelSelectCases {
+		for j, sc := range currChannelSelectCases {
 			selectCases = append(selectCases, selectable.SelectCase[T]{
 				ChannelName: sc.ChannelName,
 				MsgsC:       sc.MsgsC,
@@ -111,13 +105,18 @@ func (c *compositeChannelByPrioritization[T, W]) NextSelectCases(upto int) ([]se
 				}),
 			})
 			added++
-			areAllCasesAdded = (i == len(c.channels)-1) && allSelected
 			if added == upto {
+				areAllCasesAdded := areAllCasesAddedSoFar &&
+					areAllDirectChannelsSelected &&
+					(i == len(nextSelectCasesIndexes)-1) &&
+					allCurrDescendantsSelected &&
+					(j == len(currChannelSelectCases)-1)
 				return selectCases, areAllCasesAdded, nil
 			}
 		}
+		areAllCasesAddedSoFar = areAllCasesAddedSoFar && allCurrDescendantsSelected
 	}
-	return selectCases, areAllCasesAdded, nil
+	return selectCases, areAllCasesAddedSoFar, nil
 }
 
 func (c *compositeChannelByPrioritization[T, W]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode, recvOK bool) {
