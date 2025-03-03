@@ -50,6 +50,13 @@ func (pc *PriorityChannel[T]) Close() {
 }
 
 func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, channelName string, status ReceiveStatus) {
+	select {
+	case <-pc.ctx.Done():
+		return getZero[T](), "", ReceivePriorityChannelClosed
+	case <-ctx.Done():
+		return getZero[T](), "", ReceiveContextCancelled
+	default:
+	}
 	msg, channelName, pathInTree, status := pc.doReceiveSingleMessage(ctx, withDefaultCase)
 	for status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed {
 		pc.compositeChannel.UpdateOnCaseSelected(pathInTree, false)
