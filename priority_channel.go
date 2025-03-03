@@ -10,6 +10,7 @@ import (
 
 type PriorityChannel[T any] struct {
 	ctx                        context.Context
+	ctxCancel                  context.CancelFunc
 	compositeChannel           selectable.Channel[T]
 	channelReceiveWaitInterval *time.Duration
 }
@@ -19,8 +20,10 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 	for _, option := range options {
 		option(pcOptions)
 	}
+	ctx, cancel := context.WithCancel(ctx)
 	return &PriorityChannel[T]{
 		ctx:                        ctx,
+		ctxCancel:                  cancel,
 		compositeChannel:           compositeChannel,
 		channelReceiveWaitInterval: pcOptions.channelReceiveWaitInterval,
 	}
@@ -42,13 +45,17 @@ func (pc *PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName strin
 	return pc.receiveSingleMessage(context.Background(), true)
 }
 
+func (pc *PriorityChannel[T]) Close() {
+	pc.ctxCancel()
+}
+
 func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, channelName string, status ReceiveStatus) {
 	msg, channelName, pathInTree, status := pc.doReceiveSingleMessage(ctx, withDefaultCase)
-	for status == ReceiveChannelClosed || status == ReceivePriorityChannelCancelled {
+	for status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed {
 		pc.compositeChannel.UpdateOnCaseSelected(pathInTree, false)
 		prevChannelName := channelName
 		msg, channelName, pathInTree, status = pc.doReceiveSingleMessage(ctx, withDefaultCase)
-		if channelName == prevChannelName && (status == ReceiveChannelClosed || status == ReceivePriorityChannelCancelled) {
+		if channelName == prevChannelName && (status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed) {
 			// same channel still returned as closed
 			break
 		}
@@ -62,7 +69,7 @@ func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDe
 		currNumOfChannelsToProcess++
 		channelsSelectCases, isLastIteration, closedChannel := pc.compositeChannel.NextSelectCases(currNumOfChannelsToProcess)
 		if closedChannel != nil {
-			return getZero[T](), closedChannel.ChannelName, closedChannel.PathInTree, ReceivePriorityChannelCancelled
+			return getZero[T](), closedChannel.ChannelName, closedChannel.PathInTree, ReceivePriorityChannelClosed
 		}
 		if len(channelsSelectCases) == 0 {
 			if isLastIteration {
@@ -127,7 +134,7 @@ func (pc *PriorityChannel[T]) selectCasesOfNextIteration(
 	switch chosen {
 	case 0:
 		// context of the priority channel is done
-		return chosen, recv, recvOk, ReceivePriorityChannelCancelled
+		return chosen, recv, recvOk, ReceivePriorityChannelClosed
 	case 1:
 		// context of the specific request is done
 		return chosen, recv, recvOk, ReceiveContextCancelled

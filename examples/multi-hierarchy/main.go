@@ -169,7 +169,7 @@ func main() {
 					cancel()
 					break
 				}
-			} else if status == priority_channels.ReceivePriorityChannelCancelled {
+			} else if status == priority_channels.ReceivePriorityChannelClosed {
 				var err error
 				if channel == "" {
 					_, err = f.WriteString(fmt.Sprintf("Priority Channel is closed\n"))
@@ -199,7 +199,7 @@ func main() {
 
 			if status != priority_channels.ReceiveSuccess &&
 				status != priority_channels.ReceiveChannelClosed &&
-				(status != priority_channels.ReceivePriorityChannelCancelled || channel == "") {
+				(status != priority_channels.ReceivePriorityChannelClosed || channel == "") {
 				_, err := f.WriteString("Exiting\n")
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)
@@ -224,6 +224,28 @@ func main() {
 			operation = "Stopped"
 		}
 		if strings.HasPrefix(upperLine, "C") {
+			switch upperLine {
+			case "CA":
+				fmt.Printf("Closing Priority Channel of Customer A\n")
+				customerAPriorityChannel.Close()
+				continue
+			case "CB":
+				fmt.Printf("Closing Priority Channel of Customer B\n")
+				customerBPriorityChannel.Close()
+				continue
+			case "CU":
+				fmt.Printf("Closing Priority Channel of Urgent Messages\n")
+				urgentMessagesPriorityChannel.Close()
+				continue
+			case "CC":
+				fmt.Printf("Closing Combined Priority Channel of Both Customers\n")
+				combinedUsersAndMessageTypesPriorityChannel.Close()
+				continue
+			case "CG":
+				fmt.Printf("Closing Priority Channel \n")
+				ch.Close()
+				continue
+			}
 			upperLine = strings.TrimPrefix(upperLine, "C")
 			number, err := strconv.Atoi(upperLine)
 			if err != nil || number < 0 || number > channelsNum {

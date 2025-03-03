@@ -396,8 +396,8 @@ func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_PriorityChanne
 	}
 
 	message, channelName, status := ch.ReceiveWithContext(ctx)
-	if status != priority_channels.ReceivePriorityChannelCancelled {
-		t.Errorf("Expected status ReceivePriorityChannelCancelled (%d), but got %d", priority_channels.ReceivePriorityChannelCancelled, status)
+	if status != priority_channels.ReceivePriorityChannelClosed {
+		t.Errorf("Expected status ReceivePriorityChannelClosed (%d), but got %d", priority_channels.ReceivePriorityChannelClosed, status)
 	}
 	if channelName != "" {
 		t.Errorf("Expected empty channel name, but got %s", channelName)
@@ -462,8 +462,8 @@ func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_InnerPriorityC
 	}
 
 	message, channelName, status := ch.ReceiveWithContext(ctx)
-	if status != priority_channels.ReceivePriorityChannelCancelled {
-		t.Errorf("Expected status ReceivePriorityChannelCancelled (%d), but got %d", priority_channels.ReceivePriorityChannelCancelled, status)
+	if status != priority_channels.ReceivePriorityChannelClosed {
+		t.Errorf("Expected status ReceivePriorityChannelClosed (%d), but got %d", priority_channels.ReceivePriorityChannelClosed, status)
 	}
 	if channelName != "Paying Customer" {
 		t.Errorf("Expected channel name 'Paying Customer', but got %s", channelName)

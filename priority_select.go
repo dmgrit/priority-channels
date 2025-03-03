@@ -13,6 +13,7 @@ func Select[T any](ctx context.Context,
 	if err != nil {
 		return getZero[T](), "", ReceiveStatusUnknown, err
 	}
+	defer pc.Close()
 	msg, channelName, status = pc.ReceiveWithContext(ctx)
 	return
 }
@@ -24,6 +25,7 @@ func SelectWithDefaultCase[T any](
 	if err != nil {
 		return getZero[T](), "", ReceiveStatusUnknown, err
 	}
+	defer pc.Close()
 	msg, channelName, status = pc.ReceiveWithDefaultCase()
 	return
 }

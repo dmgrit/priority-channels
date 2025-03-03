@@ -210,7 +210,7 @@ func main() {
 					cancel()
 					break
 				}
-			} else if status == priority_channels.ReceivePriorityChannelCancelled {
+			} else if status == priority_channels.ReceivePriorityChannelClosed {
 				var err error
 				if channel == "" {
 					_, err = f.WriteString(fmt.Sprintf("Priority Channel is closed\n"))
@@ -240,7 +240,7 @@ func main() {
 
 			if status != priority_channels.ReceiveSuccess &&
 				status != priority_channels.ReceiveChannelClosed &&
-				(status != priority_channels.ReceivePriorityChannelCancelled || channel == "") {
+				(status != priority_channels.ReceivePriorityChannelClosed || channel == "") {
 				_, err := f.WriteString("Exiting\n")
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)
@@ -278,6 +278,11 @@ func main() {
 		if strings.HasPrefix(line, "c") {
 			isClose = true
 			line = strings.TrimPrefix(line, "c")
+		}
+		if strings.ToUpper(line) == "CG" {
+			fmt.Printf("Closing Priority Channel \n")
+			ch.Close()
+			continue
 		}
 		number, err := strconv.Atoi(line)
 		if err != nil || number < 0 || number > channelsNum {

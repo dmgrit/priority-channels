@@ -103,9 +103,9 @@ func TestWrappedChannelClosed(t *testing.T) {
 	}
 	cancel()
 	_, channelName, status := wrappedChannel.ReceiveWithContext(context.Background())
-	if status != priority_channels.ReceivePriorityChannelCancelled {
-		t.Errorf("Expected status ReceivePriorityChannelCancelled (%v), but got %v",
-			priority_channels.ReceivePriorityChannelCancelled, status)
+	if status != priority_channels.ReceivePriorityChannelClosed {
+		t.Errorf("Expected status ReceivePriorityChannelClosed (%v), but got %v",
+			priority_channels.ReceivePriorityChannelClosed, status)
 	}
 	if channelName != "" {
 		t.Errorf("Expected empty priority channel name, but got %s", channelName)

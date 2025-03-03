@@ -495,8 +495,8 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_PriorityChannelCon
 	}
 
 	message, channelName, status := ch.ReceiveWithContext(ctx)
-	if status != priority_channels.ReceivePriorityChannelCancelled {
-		t.Errorf("Expected status ReceivePriorityChannelCancelled (%d), but got %d", priority_channels.ReceivePriorityChannelCancelled, status)
+	if status != priority_channels.ReceivePriorityChannelClosed {
+		t.Errorf("Expected status ReceivePriorityChannelClosed (%d), but got %d", priority_channels.ReceivePriorityChannelClosed, status)
 	}
 	if channelName != "" {
 		t.Errorf("Expected empty channel name, but got %s", channelName)
@@ -559,8 +559,8 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_InnerPriorityChann
 	}
 
 	message, channelName, status := ch.ReceiveWithContext(ctx)
-	if status != priority_channels.ReceivePriorityChannelCancelled {
-		t.Errorf("Expected status ReceivePriorityChannelCancelled (%d), but got %d", priority_channels.ReceivePriorityChannelCancelled, status)
+	if status != priority_channels.ReceivePriorityChannelClosed {
+		t.Errorf("Expected status ReceivePriorityChannelClosed (%d), but got %d", priority_channels.ReceivePriorityChannelClosed, status)
 	}
 	if channelName != "Free User" {
 		t.Errorf("Expected channel name 'Free User', but got %s", channelName)
@@ -643,8 +643,8 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_DeepHierarchy_Inne
 	}
 
 	message, channelName, status := ch.ReceiveWithContext(ctx)
-	if status != priority_channels.ReceivePriorityChannelCancelled {
-		t.Errorf("Expected status ReceivePriorityChannelCancelled (%d), but got %d", priority_channels.ReceivePriorityChannelCancelled, status)
+	if status != priority_channels.ReceivePriorityChannelClosed {
+		t.Errorf("Expected status ReceivePriorityChannelClosed (%d), but got %d", priority_channels.ReceivePriorityChannelClosed, status)
 	}
 	if channelName != "Free User" {
 		t.Errorf("Expected channel name 'Free User', but got %s", channelName)

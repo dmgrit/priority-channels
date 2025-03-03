@@ -10,9 +10,9 @@ type ReceiveStatus int
 const (
 	ReceiveSuccess ReceiveStatus = iota
 	ReceiveContextCancelled
-	ReceiveChannelClosed
 	ReceiveDefaultCase
-	ReceivePriorityChannelCancelled
+	ReceiveChannelClosed
+	ReceivePriorityChannelClosed
 	ReceiveNoOpenChannels
 	ReceiveStatusUnknown
 )
@@ -21,8 +21,10 @@ func (r ReceiveStatus) ExitReason() ExitReason {
 	switch r {
 	case ReceiveChannelClosed:
 		return ChannelClosed
-	case ReceivePriorityChannelCancelled:
-		return PriorityChannelCancelled
+	case ReceivePriorityChannelClosed:
+		return PriorityChannelClosed
+	case ReceiveNoOpenChannels:
+		return NoOpenChannels
 	default:
 		return UnknownExitReason
 	}
@@ -32,7 +34,8 @@ type ExitReason int
 
 const (
 	ChannelClosed ExitReason = iota
-	PriorityChannelCancelled
+	PriorityChannelClosed
+	NoOpenChannels
 	UnknownExitReason
 )
 

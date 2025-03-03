@@ -496,8 +496,8 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_PriorityChannelContextC
 	}
 
 	message, channelName, status := ch.ReceiveWithContext(context.Background())
-	if status != pc.ReceivePriorityChannelCancelled {
-		t.Errorf("Expected status ReceivePriorityChannelCancelled (%d), but got %d", pc.ReceivePriorityChannelCancelled, status)
+	if status != pc.ReceivePriorityChannelClosed {
+		t.Errorf("Expected status ReceivePriorityChannelClosed (%d), but got %d", pc.ReceivePriorityChannelClosed, status)
 	}
 	if channelName != "" {
 		t.Errorf("Expected empty channel name, but got %s", channelName)
