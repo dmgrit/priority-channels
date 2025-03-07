@@ -51,7 +51,7 @@ const (
 type PriorityChannelOptions struct {
 	channelReceiveWaitInterval *time.Duration
 	autoDisableClosedChannels  bool
-	frequencyMethod            FrequencyMethod
+	frequencyMethod            *FrequencyMethod
 }
 
 const defaultChannelReceiveWaitInterval = 100 * time.Microsecond
@@ -70,7 +70,7 @@ func AutoDisableClosedChannels() func(opt *PriorityChannelOptions) {
 
 func WithFrequencyMethod(method FrequencyMethod) func(opt *PriorityChannelOptions) {
 	return func(opt *PriorityChannelOptions) {
-		opt.frequencyMethod = method
+		opt.frequencyMethod = &method
 	}
 }
 

@@ -31,14 +31,19 @@ func getFrequencyStrategy(options ...func(*PriorityChannelOptions)) (Prioritizat
 	for _, option := range options {
 		option(pcOptions)
 	}
+	frequencyMethod := ProbabilisticByCaseDuplication
+	if pcOptions.frequencyMethod != nil {
+		frequencyMethod = *pcOptions.frequencyMethod
+	}
+
 	switch {
-	case pcOptions.frequencyMethod == ProbabilisticByMultipleRandCalls:
+	case frequencyMethod == ProbabilisticByMultipleRandCalls:
 		return nil, strategies.NewByProbability()
-	case pcOptions.frequencyMethod == ProbabilisticByCaseDuplication:
+	case frequencyMethod == ProbabilisticByCaseDuplication:
 		return frequency_strategies.NewProbabilisticByCaseDuplication(), nil
-	case pcOptions.frequencyMethod == StrictOrderFully:
+	case frequencyMethod == StrictOrderFully:
 		return frequency_strategies.NewWithStrictOrderFully(), nil
-	case pcOptions.frequencyMethod == StrictOrderAcrossCycles:
+	case frequencyMethod == StrictOrderAcrossCycles:
 		return frequency_strategies.NewWithStrictOrderAcrossCycles(), nil
 	default:
 		return frequency_strategies.NewProbabilisticByCaseDuplication(), nil
