@@ -7,6 +7,7 @@ import (
 	pc "github.com/dmgrit/priority-channels"
 	"github.com/dmgrit/priority-channels/channels"
 	"github.com/dmgrit/priority-channels/strategies"
+	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 	"sort"
 	"testing"
 	"time"
@@ -82,7 +83,7 @@ func TestProcessMessagesByDynamicStrategy(t *testing.T) {
 	msgsChannels[2] = make(chan *Msg, 5)
 
 	strategiesByName := map[string]strategies.DynamicSubStrategy{
-		"DayTime":   strategies.NewByFreqRatioWithStrictOrder(),
+		"DayTime":   frequency_strategies.NewWithStrictOrderFully(),
 		"NightTime": newByFirstDecimalDigitAsc(),
 	}
 	channels := []channels.ChannelWithWeight[*Msg, map[string]interface{}]{
@@ -218,7 +219,7 @@ func TestProcessMessagesByDynamicStrategy_TypeAssertion(t *testing.T) {
 	}{
 		{
 			Name:                 "ByFreqRatio",
-			Strategy:             strategies.NewByFreqRatio(),
+			Strategy:             frequency_strategies.NewWithStrictOrderAcrossCycles(),
 			InvalidWeight:        1.3,
 			ExpectedErrorMessage: "channel 'Channel 1': frequency ratio must be of type int",
 		},
@@ -242,13 +243,13 @@ func TestProcessMessagesByDynamicStrategy_TypeAssertion(t *testing.T) {
 		},
 		{
 			Name:                 "Invalid number of strategies",
-			Strategy:             strategies.NewByFreqRatio(),
+			Strategy:             frequency_strategies.NewWithStrictOrderAcrossCycles(),
 			InvalidStrategies:    map[string]interface{}{"DayTime": 1},
 			ExpectedErrorMessage: "channel 'Channel 1': invalid number of strategies: 1, expected 2",
 		},
 		{
 			Name:                 "Unknown strategy",
-			Strategy:             strategies.NewByFreqRatio(),
+			Strategy:             frequency_strategies.NewWithStrictOrderAcrossCycles(),
 			InvalidStrategies:    map[string]interface{}{"DayTime": 1, "PartyTime": 10},
 			ExpectedErrorMessage: "channel 'Channel 1': unknown strategy PartyTime",
 		},

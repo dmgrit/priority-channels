@@ -11,7 +11,7 @@ func (e *WeightValidationError) Error() string {
 	return fmt.Sprintf("channel %d: %v", e.ChannelIndex, e.Err)
 }
 
-func convertWeightsWithTypeAssertion[W any](weightsLabel string, weights []interface{}) ([]W, error) {
+func ConvertWeightsWithTypeAssertion[W any](weightsLabel string, weights []interface{}) ([]W, error) {
 	result := make([]W, 0, len(weights))
 	for i, v := range weights {
 		w, ok := v.(W)

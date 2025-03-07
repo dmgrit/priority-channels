@@ -49,7 +49,7 @@ func (s *HighestAlwaysFirst) Initialize(priorities []int) error {
 }
 
 func (s *HighestAlwaysFirst) InitializeWithTypeAssertion(priorities []interface{}) error {
-	prioritiesInt, err := convertWeightsWithTypeAssertion[int]("priority", priorities)
+	prioritiesInt, err := ConvertWeightsWithTypeAssertion[int]("priority", priorities)
 	if err != nil {
 		return err
 	}

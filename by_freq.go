@@ -6,12 +6,13 @@ import (
 	"github.com/dmgrit/priority-channels/channels"
 	"github.com/dmgrit/priority-channels/internal/selectable"
 	"github.com/dmgrit/priority-channels/strategies"
+	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
 
 func NewByFrequencyRatio[T any](ctx context.Context,
 	channelsWithFreqRatios []channels.ChannelWithFreqRatio[T],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
-	strategy, probabilityStrategy := chooseFrequencyRatioStrategy(options...)
+	strategy, probabilityStrategy := getFrequencyStrategy(options...)
 	if probabilityStrategy != nil {
 		probabilityChannels := toProbabilitySelectableChannels(channelsWithFreqRatios)
 		return newByStrategy(ctx, probabilityStrategy, probabilityChannels, options...)
@@ -25,7 +26,7 @@ func NewByFrequencyRatio[T any](ctx context.Context,
 	return newByStrategy(ctx, strategy, selectableChannels, options...)
 }
 
-func chooseFrequencyRatioStrategy(options ...func(*PriorityChannelOptions)) (PrioritizationStrategy[int], PrioritizationStrategy[float64]) {
+func getFrequencyStrategy(options ...func(*PriorityChannelOptions)) (PrioritizationStrategy[int], PrioritizationStrategy[float64]) {
 	pcOptions := &PriorityChannelOptions{}
 	for _, option := range options {
 		option(pcOptions)
@@ -34,13 +35,13 @@ func chooseFrequencyRatioStrategy(options ...func(*PriorityChannelOptions)) (Pri
 	case pcOptions.frequencyMethod == ProbabilisticByMultipleRandCalls:
 		return nil, strategies.NewByProbability()
 	case pcOptions.frequencyMethod == ProbabilisticByCaseDuplication:
-		return strategies.NewByFreqRatioWithCasesDuplication(), nil
+		return frequency_strategies.NewProbabilisticByCaseDuplication(), nil
 	case pcOptions.frequencyMethod == StrictOrderFully:
-		return strategies.NewByFreqRatioWithStrictOrder(), nil
+		return frequency_strategies.NewWithStrictOrderFully(), nil
 	case pcOptions.frequencyMethod == StrictOrderAcrossCycles:
-		return strategies.NewByFreqRatio(), nil
+		return frequency_strategies.NewWithStrictOrderAcrossCycles(), nil
 	default:
-		return strategies.NewByFreqRatioWithCasesDuplication(), nil
+		return frequency_strategies.NewProbabilisticByCaseDuplication(), nil
 	}
 }
 

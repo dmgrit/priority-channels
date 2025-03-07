@@ -9,7 +9,7 @@ import (
 func CombineByFrequencyRatio[T any](ctx context.Context,
 	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
-	strategy, probabilityStrategy := chooseFrequencyRatioStrategy(options...)
+	strategy, probabilityStrategy := getFrequencyStrategy(options...)
 	if probabilityStrategy != nil {
 		probabilityChannels := toProbabilitySelectableChannelsWithWeightByFreqRatio(priorityChannelsWithFreqRatio)
 		return newByStrategy(ctx, probabilityStrategy, probabilityChannels, options...)

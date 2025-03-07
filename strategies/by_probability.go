@@ -72,7 +72,7 @@ func (s *ByProbability) Initialize(probabilities []float64) error {
 }
 
 func (s *ByProbability) InitializeWithTypeAssertion(probabilities []interface{}) error {
-	probabilitiesFloat64, err := convertWeightsWithTypeAssertion[float64]("probability", probabilities)
+	probabilitiesFloat64, err := ConvertWeightsWithTypeAssertion[float64]("probability", probabilities)
 	if err != nil {
 		return err
 	}
