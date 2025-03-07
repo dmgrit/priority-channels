@@ -1,9 +1,11 @@
-package strategies
+package priority_strategies
 
 import (
 	"errors"
 	"math/rand/v2"
 	"sort"
+
+	"github.com/dmgrit/priority-channels/strategies"
 )
 
 var (
@@ -38,7 +40,7 @@ func (s *ByProbability) Initialize(probabilities []float64) error {
 	probSum := 0.0
 	for i, p := range probabilities {
 		if p <= 0 || p >= 1 {
-			return &WeightValidationError{
+			return &strategies.WeightValidationError{
 				ChannelIndex: i,
 				Err:          ErrProbabilityIsInvalid,
 			}
@@ -72,14 +74,14 @@ func (s *ByProbability) Initialize(probabilities []float64) error {
 }
 
 func (s *ByProbability) InitializeWithTypeAssertion(probabilities []interface{}) error {
-	probabilitiesFloat64, err := ConvertWeightsWithTypeAssertion[float64]("probability", probabilities)
+	probabilitiesFloat64, err := strategies.ConvertWeightsWithTypeAssertion[float64]("probability", probabilities)
 	if err != nil {
 		return err
 	}
 	return s.Initialize(probabilitiesFloat64)
 }
 
-func (s *ByProbability) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
+func (s *ByProbability) NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool) {
 	if len(s.pendingProbabilities) > 0 {
 		i := 0
 		if len(s.pendingProbabilities) > 1 {
@@ -93,9 +95,9 @@ func (s *ByProbability) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, b
 		s.readjustSortedProbabilitySelectionsList(s.pendingProbabilities)
 	}
 
-	res := make([]RankedIndex, 0, upto)
+	res := make([]strategies.RankedIndex, 0, upto)
 	for i := 0; i < upto && i < len(s.currSelectedIndexes); i++ {
-		res = append(res, RankedIndex{Index: s.currSelectedIndexes[i], Rank: i + 1})
+		res = append(res, strategies.RankedIndex{Index: s.currSelectedIndexes[i], Rank: i + 1})
 	}
 	return res, len(s.pendingProbabilities) == 0 && len(res) == len(s.currSelectedIndexes)
 }

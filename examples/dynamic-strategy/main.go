@@ -13,6 +13,7 @@ import (
 	"github.com/dmgrit/priority-channels/channels"
 	"github.com/dmgrit/priority-channels/strategies"
 	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
+	"github.com/dmgrit/priority-channels/strategies/priority_strategies"
 )
 
 func main() {
@@ -25,9 +26,9 @@ func main() {
 	strategiesByName := map[string]strategies.DynamicSubStrategy{
 		"Regular":              frequency_strategies.NewWithStrictOrderFully(),
 		"A-Reserved":           frequency_strategies.NewWithStrictOrderFully(),
-		"A-Reserved-Exclusive": strategies.NewByHighestAlwaysFirst(),
+		"A-Reserved-Exclusive": priority_strategies.NewByHighestAlwaysFirst(),
 		"B-Reserved":           frequency_strategies.NewWithStrictOrderFully(),
-		"B-Reserved-Exclusive": strategies.NewByHighestAlwaysFirst(),
+		"B-Reserved-Exclusive": priority_strategies.NewByHighestAlwaysFirst(),
 	}
 	channelsWithWeights := []channels.ChannelWithWeight[string, map[string]interface{}]{
 		channels.NewChannelWithWeight("Channel A", msgsChannels[0],

@@ -8,6 +8,7 @@ import (
 	"github.com/dmgrit/priority-channels/channels"
 	"github.com/dmgrit/priority-channels/strategies"
 	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
+	"github.com/dmgrit/priority-channels/strategies/priority_strategies"
 	"sort"
 	"testing"
 	"time"
@@ -225,13 +226,13 @@ func TestProcessMessagesByDynamicStrategy_TypeAssertion(t *testing.T) {
 		},
 		{
 			Name:                 "ByHighestAlwaysFirst",
-			Strategy:             strategies.NewByHighestAlwaysFirst(),
+			Strategy:             priority_strategies.NewByHighestAlwaysFirst(),
 			InvalidWeight:        1.3,
 			ExpectedErrorMessage: "channel 'Channel 1': priority must be of type int",
 		},
 		{
 			Name:                 "ByProbability",
-			Strategy:             strategies.NewByProbability(),
+			Strategy:             priority_strategies.NewByProbability(),
 			InvalidWeight:        1,
 			ExpectedErrorMessage: "channel 'Channel 1': probability must be of type float64",
 		},
@@ -316,7 +317,7 @@ func (s *byFirstDecimalDigit) Initialize(priorities []float64) error {
 		if p < 0 {
 			return &strategies.WeightValidationError{
 				ChannelIndex: i,
-				Err:          strategies.ErrPriorityIsNegative,
+				Err:          priority_strategies.ErrPriorityIsNegative,
 			}
 		}
 		firstDecimalDigit := int(p*10) % 10

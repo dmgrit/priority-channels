@@ -4,14 +4,14 @@ import (
 	"context"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
-	"github.com/dmgrit/priority-channels/strategies"
+	"github.com/dmgrit/priority-channels/strategies/priority_strategies"
 )
 
 func CombineByHighestAlwaysFirst[T any](ctx context.Context,
 	priorityChannelsWithPriority []PriorityChannelWithPriority[T],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
 	channels := toSelectableChannelsWithWeightByPriority[T](priorityChannelsWithPriority)
-	strategy := strategies.NewByHighestAlwaysFirst()
+	strategy := priority_strategies.NewByHighestAlwaysFirst()
 	return newByStrategy(ctx, strategy, channels, options...)
 }
 

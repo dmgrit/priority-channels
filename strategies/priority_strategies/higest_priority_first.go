@@ -1,8 +1,10 @@
-package strategies
+package priority_strategies
 
 import (
 	"errors"
 	"sort"
+
+	"github.com/dmgrit/priority-channels/strategies"
 )
 
 var ErrPriorityIsNegative = errors.New("priority cannot be negative")
@@ -29,7 +31,7 @@ func (s *HighestAlwaysFirst) Initialize(priorities []int) error {
 	s.sortedPriorities = make([]sortedToOriginalIndex, 0, len(priorities))
 	for i, p := range priorities {
 		if p < 0 {
-			return &WeightValidationError{
+			return &strategies.WeightValidationError{
 				ChannelIndex: i,
 				Err:          ErrPriorityIsNegative,
 			}
@@ -49,20 +51,15 @@ func (s *HighestAlwaysFirst) Initialize(priorities []int) error {
 }
 
 func (s *HighestAlwaysFirst) InitializeWithTypeAssertion(priorities []interface{}) error {
-	prioritiesInt, err := ConvertWeightsWithTypeAssertion[int]("priority", priorities)
+	prioritiesInt, err := strategies.ConvertWeightsWithTypeAssertion[int]("priority", priorities)
 	if err != nil {
 		return err
 	}
 	return s.Initialize(prioritiesInt)
 }
 
-type RankedIndex struct {
-	Index int
-	Rank  int
-}
-
-func (s *HighestAlwaysFirst) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
-	res := make([]RankedIndex, 0, upto)
+func (s *HighestAlwaysFirst) NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool) {
+	res := make([]strategies.RankedIndex, 0, upto)
 	numDistinct := 0
 	prevPriority := 0
 	for i := 0; i < len(s.sortedPriorities); i++ {
@@ -73,7 +70,7 @@ func (s *HighestAlwaysFirst) NextSelectCasesRankedIndexes(upto int) ([]RankedInd
 			}
 			prevPriority = s.sortedPriorities[i].Priority
 		}
-		res = append(res, RankedIndex{
+		res = append(res, strategies.RankedIndex{
 			Index: s.sortedPriorities[i].OriginalIndex,
 			Rank:  numDistinct,
 		})
