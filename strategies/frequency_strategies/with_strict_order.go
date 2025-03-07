@@ -10,7 +10,6 @@ import (
 var ErrFreqRatioMustBeGreaterThanZero = errors.New("frequency ratio must be greater than 0")
 
 type WithStrictOrder struct {
-	channelName       string
 	levels            []*level
 	origIndexToBucket map[int]*priorityBucket
 	disabledCases     map[int]int

@@ -7,7 +7,6 @@ import (
 )
 
 type ProbabilisticByCaseDuplication struct {
-	channelName     string
 	disabledCases   map[int]int
 	selectedIndexes []strategies.RankedIndex
 	origFreqRatios  []int

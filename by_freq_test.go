@@ -139,7 +139,7 @@ func TestProcessMessagesByFrequencyRatio_TenThousandMessages(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			testProcessMessagesByFrequencyRatioWithMethod(t, tc.FreqRatioMethod, 500)
+			testProcessMessagesByFrequencyRatioWithMethod(t, tc.FreqRatioMethod, 10000)
 		})
 	}
 }
