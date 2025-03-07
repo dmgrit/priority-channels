@@ -26,13 +26,15 @@ type samePriorityRange struct {
 	FrequencyStrategy frequencyStrategy
 	indexToOrigIndex  map[int]int
 	origIndexToIndex  map[int]int
+	disabledCases     map[int]struct{}
 }
 
-func newSamePriorityRange(priority int, origIndexes []int, strategy frequencyStrategy) (*samePriorityRange, error) {
+func newSamePriorityRange(origIndexes []int, strategy frequencyStrategy) (*samePriorityRange, error) {
 	res := &samePriorityRange{
 		FrequencyStrategy: strategy,
 		indexToOrigIndex:  make(map[int]int),
 		origIndexToIndex:  make(map[int]int),
+		disabledCases:     make(map[int]struct{}),
 	}
 	weights := make([]int, 0, len(origIndexes))
 	for i, origIndex := range origIndexes {
@@ -65,12 +67,22 @@ func (sp *samePriorityRange) UpdateOnCaseSelected(origIndex int) {
 }
 
 func (sp *samePriorityRange) DisableSelectCase(origIndex int) {
+	if _, ok := sp.disabledCases[origIndex]; ok {
+		return
+	}
 	index, ok := sp.origIndexToIndex[origIndex]
 	if !ok {
 		// this should never happen
 		return
 	}
 	sp.FrequencyStrategy.DisableSelectCase(index)
+	sp.disabledCases[origIndex] = struct{}{}
+	delete(sp.origIndexToIndex, origIndex)
+	delete(sp.indexToOrigIndex, index)
+}
+
+func (sp *samePriorityRange) Len() int {
+	return len(sp.indexToOrigIndex)
 }
 
 type frequencyStrategy interface {
@@ -127,7 +139,7 @@ func (s *HighestAlwaysFirst) shrinkSamePrioritiesRanges() error {
 		for j := i; j <= finishIndex; j++ {
 			origIndexes = append(origIndexes, s.sortedPriorities[j].OriginalIndex)
 		}
-		spr, err := newSamePriorityRange(currPriority, origIndexes, frequency_strategies.NewWithStrictOrderAcrossCycles())
+		spr, err := newSamePriorityRange(origIndexes, frequency_strategies.NewWithStrictOrderAcrossCycles())
 		if err != nil {
 			return err
 		}
@@ -199,9 +211,14 @@ func (s *HighestAlwaysFirst) DisableSelectCase(index int) {
 		// this should not happen
 		return
 	}
+	removeSortedPriority := true
 	if spr := s.sortedPriorities[sortedIndex].SamePriorityRange; spr != nil {
 		spr.DisableSelectCase(index)
-	} else {
+		if spr.Len() > 0 {
+			removeSortedPriority = false
+		}
+	}
+	if removeSortedPriority {
 		s.sortedPriorities = append(s.sortedPriorities[:sortedIndex], s.sortedPriorities[sortedIndex+1:]...)
 	}
 	s.disabledCases[index] = priority
