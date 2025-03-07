@@ -170,6 +170,112 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_ChannelsWithSamePriorit
 	}
 }
 
+func TestProcessMessagesByPriorityWithHighestAlwaysFirst_ChannelsWithSamePriority2(t *testing.T) {
+	var inputChannels []chan string
+
+	channelsNum := 7
+	for i := 1; i <= channelsNum; i++ {
+		inputChannels = append(inputChannels, make(chan string))
+	}
+
+	channelsWithPriority := []channels.ChannelWithPriority[string]{
+		channels.NewChannelWithPriority("Channel A", inputChannels[0], 1),
+		channels.NewChannelWithPriority("Channel B1", inputChannels[1], 2),
+		channels.NewChannelWithPriority("Channel B2", inputChannels[2], 2),
+		channels.NewChannelWithPriority("Channel B3", inputChannels[3], 2),
+		channels.NewChannelWithPriority("Channel C", inputChannels[4], 3),
+		channels.NewChannelWithPriority("Channel D1", inputChannels[5], 4),
+		channels.NewChannelWithPriority("Channel D2", inputChannels[6], 4),
+	}
+
+	testCases := []struct {
+		name               string
+		disabledPriorities map[int]bool
+		expectedRatios     map[int]float64
+	}{
+		{
+			name:               "No disabled priorities",
+			disabledPriorities: map[int]bool{},
+			expectedRatios:     map[int]float64{5: 0.5, 6: 0.5},
+		},
+		{
+			name:               "Disable priority 4",
+			disabledPriorities: map[int]bool{4: true},
+			expectedRatios:     map[int]float64{4: 1.0},
+		},
+		{
+			name:               "Disable priority 3",
+			disabledPriorities: map[int]bool{3: true},
+			expectedRatios:     map[int]float64{5: 0.5, 6: 0.5},
+		},
+		{
+			name:               "Disable priority 4 and 3",
+			disabledPriorities: map[int]bool{4: true, 3: true},
+			expectedRatios:     map[int]float64{3: 0.33, 2: 0.33, 1: 0.33},
+		},
+		{
+			name:               "Disable priority 4, 3 and 2",
+			disabledPriorities: map[int]bool{4: true, 3: true, 2: true},
+			expectedRatios:     map[int]float64{0: 1.0},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+
+			for i := 1; i <= channelsNum; i++ {
+				go func(i int) {
+					for j := 1; j <= 10000; j++ {
+						isPriorityDisabled := tc.disabledPriorities[channelsWithPriority[i-1].Priority()]
+						if isPriorityDisabled {
+							return
+						}
+						select {
+						case <-ctx.Done():
+							return
+						case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
+						}
+					}
+				}(i)
+			}
+
+			ch, err := pc.NewByHighestAlwaysFirst(ctx, channelsWithPriority)
+			if err != nil {
+				t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+			}
+
+			totalCount := 0
+			countPerChannel := make(map[string]int)
+			go func() {
+				for {
+					_, channel, ok := ch.Receive()
+					if !ok {
+						return
+					}
+					totalCount++
+					countPerChannel[channel] = countPerChannel[channel] + 1
+					if totalCount == 10000 {
+						cancel()
+						return
+					}
+				}
+			}()
+
+			<-ctx.Done()
+
+			for i, channel := range channelsWithPriority {
+				expectedRatio := tc.expectedRatios[i]
+				actualRatio := float64(countPerChannel[channel.ChannelName()]) / float64(totalCount)
+				if math.Abs(expectedRatio-actualRatio) > 0.03 {
+					t.Errorf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
+						channel.ChannelName(), expectedRatio, actualRatio)
+				}
+			}
+		})
+	}
+}
+
 func TestProcessMessagesByPriorityWithHighestAlwaysFirst_CustomWaitInterval(t *testing.T) {
 	ctx := context.Background()
 

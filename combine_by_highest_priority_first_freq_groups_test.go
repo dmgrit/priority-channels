@@ -28,15 +28,13 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	group2Priority2Channel, err := priority_channels.NewByFrequencyRatio[*Msg](ctx, []channels.ChannelWithFreqRatio[*Msg]{
-		channels.NewChannelWithFreqRatio("Priority-10", msgsChannels[2], 1),
-	}, options)
+	group2Priority2Channel, err := priority_channels.WrapAsPriorityChannel[*Msg](ctx,
+		"Priority-10", msgsChannels[2])
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	group3PriorityChannel, err := priority_channels.NewByFrequencyRatio[*Msg](ctx, []channels.ChannelWithFreqRatio[*Msg]{
-		channels.NewChannelWithFreqRatio("Priority-1000", msgsChannels[3], 1),
-	}, options)
+	group3PriorityChannel, err := priority_channels.WrapAsPriorityChannel[*Msg](ctx,
+		"Priority-1000", msgsChannels[3])
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}

@@ -260,22 +260,22 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessag
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 
-	//channelsWithPriority := []priority_channels.PriorityChannelWithPriority[string]{
-	//	priority_channels.NewPriorityChannelWithPriority("Paying Customer",
-	//		payingCustomerPriorityChannel,
-	//		5),
-	//	priority_channels.NewPriorityChannelWithPriority("Free User",
-	//		freeUserPriorityChannel,
-	//		5),
-	//}
-	channelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
-		priority_channels.NewPriorityChannelWithFreqRatio("Paying Customer",
+	channelsWithPriority := []priority_channels.PriorityChannelWithPriority[string]{
+		priority_channels.NewPriorityChannelWithPriority("Paying Customer",
 			payingCustomerPriorityChannel,
 			5),
-		priority_channels.NewPriorityChannelWithFreqRatio("Free User",
+		priority_channels.NewPriorityChannelWithPriority("Free User",
 			freeUserPriorityChannel,
 			5),
 	}
+	//channelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
+	//	priority_channels.NewPriorityChannelWithFreqRatio("Paying Customer",
+	//		payingCustomerPriorityChannel,
+	//		5),
+	//	priority_channels.NewPriorityChannelWithFreqRatio("Free User",
+	//		freeUserPriorityChannel,
+	//		5),
+	//}
 
 	expectedRatios := map[string]float64{
 		"Paying Customer - High Priority - Flagship Product": 0.3,
@@ -298,9 +298,9 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessag
 		}(i)
 	}
 
-	//ch, err := priority_channels.CombineByHighestAlwaysFirst[string](ctx, channelsWithPriority)
-	options := priority_channels.WithFrequencyMethod(priority_channels.ProbabilisticByCaseDuplication)
-	ch, err := priority_channels.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio, options)
+	ch, err := priority_channels.CombineByHighestAlwaysFirst[string](ctx, channelsWithPriority)
+	//options := priority_channels.WithFrequencyMethod(priority_channels.ProbabilisticByCaseDuplication)
+	//ch, err := priority_channels.CombineByFrequencyRatio[string](ctx, channelsWithFreqRatio, options)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
