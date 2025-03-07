@@ -11,9 +11,10 @@ import (
 var ErrPriorityIsNegative = errors.New("priority cannot be negative")
 
 type HighestAlwaysFirst struct {
-	origPriorities   []int
-	sortedPriorities []sortedToOriginalIndex
-	disabledCases    map[int]int
+	origPriorities        []int
+	sortedPriorities      []sortedToOriginalIndex
+	totalSortedPriorities int
+	disabledCases         map[int]int
 }
 
 type sortedToOriginalIndex struct {
@@ -119,6 +120,7 @@ func (s *HighestAlwaysFirst) Initialize(priorities []int) error {
 		return spi.Priority > spj.Priority ||
 			(spi.Priority == spj.Priority && spi.OriginalIndex < spj.OriginalIndex)
 	})
+	s.totalSortedPriorities = len(s.sortedPriorities)
 	if err := s.shrinkSamePrioritiesRanges(); err != nil {
 		return err
 	}
@@ -160,11 +162,10 @@ func (s *HighestAlwaysFirst) InitializeWithTypeAssertion(priorities []interface{
 
 func (s *HighestAlwaysFirst) NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool) {
 	res := make([]strategies.RankedIndex, 0, upto)
-	samePriorityRangesAllSelected := true
 	nextRank := 1
 	for i := 0; len(res) < upto && i < len(s.sortedPriorities); i++ {
 		if s.sortedPriorities[i].SamePriorityRange != nil {
-			nextIndexes, currAllSelected := s.sortedPriorities[i].SamePriorityRange.NextSelectCasesRankedIndexes(upto - len(res))
+			nextIndexes, _ := s.sortedPriorities[i].SamePriorityRange.NextSelectCasesRankedIndexes(upto - len(res))
 			maxRangeRank := 0
 			for j := range nextIndexes {
 				nextIndexes[j].Rank = nextIndexes[j].Rank + nextRank - 1
@@ -174,7 +175,6 @@ func (s *HighestAlwaysFirst) NextSelectCasesRankedIndexes(upto int) ([]strategie
 			}
 			nextRank = maxRangeRank + 1
 			res = append(res, nextIndexes...)
-			samePriorityRangesAllSelected = samePriorityRangesAllSelected && currAllSelected
 			continue
 		}
 		res = append(res, strategies.RankedIndex{
@@ -183,7 +183,7 @@ func (s *HighestAlwaysFirst) NextSelectCasesRankedIndexes(upto int) ([]strategie
 		})
 		nextRank++
 	}
-	return res, len(res) == len(s.sortedPriorities) && samePriorityRangesAllSelected
+	return res, len(res) == s.totalSortedPriorities
 }
 
 func (s *HighestAlwaysFirst) UpdateOnCaseSelected(index int) {
@@ -221,6 +221,7 @@ func (s *HighestAlwaysFirst) DisableSelectCase(index int) {
 	if removeSortedPriority {
 		s.sortedPriorities = append(s.sortedPriorities[:sortedIndex], s.sortedPriorities[sortedIndex+1:]...)
 	}
+	s.totalSortedPriorities--
 	s.disabledCases[index] = priority
 }
 
