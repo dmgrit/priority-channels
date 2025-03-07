@@ -3,6 +3,7 @@ package priority_channels_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -103,6 +104,68 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst(t *testing.T) {
 		if results[i].Body != expectedResults[i].Body {
 			t.Errorf("Result %d: Expected message %s, but got %s",
 				i, expectedResults[i].Body, results[i].Body)
+		}
+	}
+}
+
+func TestProcessMessagesByPriorityWithHighestAlwaysFirst_ChannelsWithSamePriority(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var inputChannels []chan string
+
+	channelsNum := 5
+	for i := 1; i <= channelsNum; i++ {
+		inputChannels = append(inputChannels, make(chan string))
+	}
+
+	channelsWithPriority := []channels.ChannelWithPriority[string]{
+		channels.NewChannelWithPriority("Channel A", inputChannels[0], 1),
+		channels.NewChannelWithPriority("Channel B", inputChannels[1], 1),
+		channels.NewChannelWithPriority("Channel C", inputChannels[2], 1),
+		channels.NewChannelWithPriority("Channel D", inputChannels[3], 1),
+		channels.NewChannelWithPriority("Channel E", inputChannels[4], 1),
+	}
+
+	for i := 1; i <= channelsNum; i++ {
+		go func(i int) {
+			for j := 1; j <= 10000; j++ {
+				select {
+				case <-ctx.Done():
+					return
+				case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
+				}
+			}
+		}(i)
+	}
+
+	ch, err := pc.NewByHighestAlwaysFirst(ctx, channelsWithPriority)
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+	totalCount := 0
+	countPerChannel := make(map[string]int)
+	go func() {
+		for {
+			_, channel, ok := ch.Receive()
+			if !ok {
+				return
+			}
+			totalCount++
+			countPerChannel[channel] = countPerChannel[channel] + 1
+			if totalCount == 10000 {
+				cancel()
+				return
+			}
+		}
+	}()
+
+	<-ctx.Done()
+
+	for _, channel := range channelsWithPriority {
+		expectedRatio := 0.2
+		actualRatio := float64(countPerChannel[channel.ChannelName()]) / float64(totalCount)
+		if math.Abs(expectedRatio-actualRatio) > 0.03 {
+			t.Errorf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
+				channel.ChannelName(), expectedRatio, actualRatio)
 		}
 	}
 }

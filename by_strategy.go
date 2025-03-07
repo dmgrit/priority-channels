@@ -20,7 +20,7 @@ func NewByStrategy[T any, W any](ctx context.Context,
 
 type PrioritizationStrategy[W any] interface {
 	Initialize(weights []W) error
-	NextSelectCasesIndexes(upto int) ([]int, bool)
+	NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool)
 	UpdateOnCaseSelected(index int)
 	DisableSelectCase(index int)
 }
@@ -79,19 +79,32 @@ func (c *compositeChannelByPrioritization[T, W]) ChannelName() string {
 }
 
 func (c *compositeChannelByPrioritization[T, W]) NextSelectCases(upto int) ([]selectable.SelectCase[T], bool, *selectable.ClosedChannelDetails) {
-	added := 0
 	var selectCases []selectable.SelectCase[T]
-	nextSelectCasesIndexes, areAllDirectChannelsSelected := c.strategy.NextSelectCasesIndexes(upto)
+	nextSelectCasesIndexes, areAllDirectChannelsSelected := c.strategy.NextSelectCasesRankedIndexes(upto)
 	areAllCasesAddedSoFar := areAllDirectChannelsSelected
 
-	for i, channelIndex := range nextSelectCasesIndexes {
-		currChannelSelectCases, allCurrDescendantsSelected, closedChannel := c.channels[channelIndex].NextSelectCases(upto - added)
+	prevChannelRank := -1
+	totalAdded, maxCurrRankAdded := 0, 0
+
+	for i, channelRankedIndex := range nextSelectCasesIndexes {
+		currChannelIndex := channelRankedIndex.Index
+		currChannelRank := channelRankedIndex.Rank
+		currChannelAdded := 0
+		if prevChannelRank != currChannelRank && i > 0 {
+			totalAdded += maxCurrRankAdded
+			if totalAdded >= upto {
+				return selectCases, false, nil
+			}
+			maxCurrRankAdded = 0
+		}
+		prevChannelRank = currChannelRank
+		currChannelSelectCases, allCurrDescendantsSelected, closedChannel := c.channels[currChannelIndex].NextSelectCases(upto - totalAdded)
 		if closedChannel != nil {
 			return nil, true, &selectable.ClosedChannelDetails{
 				ChannelName: closedChannel.ChannelName,
 				PathInTree: append(closedChannel.PathInTree, selectable.ChannelNode{
 					ChannelName:  c.channelName,
-					ChannelIndex: channelIndex,
+					ChannelIndex: currChannelIndex,
 				}),
 			}
 		}
@@ -101,17 +114,22 @@ func (c *compositeChannelByPrioritization[T, W]) NextSelectCases(upto int) ([]se
 				MsgsC:       sc.MsgsC,
 				PathInTree: append(sc.PathInTree, selectable.ChannelNode{
 					ChannelName:  c.channelName,
-					ChannelIndex: channelIndex,
+					ChannelIndex: currChannelIndex,
 				}),
 			})
-			added++
-			if added == upto {
+			currChannelAdded++
+			if currChannelAdded > maxCurrRankAdded {
+				maxCurrRankAdded = currChannelAdded
+			}
+			if totalAdded+currChannelAdded >= upto {
 				areAllCasesAdded := areAllCasesAddedSoFar &&
 					areAllDirectChannelsSelected &&
 					(i == len(nextSelectCasesIndexes)-1) &&
 					allCurrDescendantsSelected &&
 					(j == len(currChannelSelectCases)-1)
-				return selectCases, areAllCasesAdded, nil
+				if areAllCasesAdded {
+					return selectCases, areAllCasesAdded, nil
+				}
 			}
 		}
 		areAllCasesAddedSoFar = areAllCasesAddedSoFar && allCurrDescendantsSelected

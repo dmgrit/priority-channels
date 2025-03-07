@@ -23,7 +23,7 @@ func (e *UnknownStrategyError) Error() string {
 
 type DynamicSubStrategy interface {
 	InitializeWithTypeAssertion(weights []interface{}) error
-	NextSelectCasesIndexes(upto int) ([]int, bool)
+	NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool)
 	UpdateOnCaseSelected(index int)
 	DisableSelectCase(index int)
 }
@@ -86,13 +86,13 @@ func (s *Dynamic) validateChannelWeightsStrategies(channelIndex int, weightByStr
 	return nil
 }
 
-func (s *Dynamic) NextSelectCasesIndexes(upto int) ([]int, bool) {
+func (s *Dynamic) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
 	currentStrategyName := s.currentStrategySelector()
 	if currentStrategyName != s.currentStrategyName {
 		s.currentStrategyName = currentStrategyName
 	}
 	strategy := s.strategiesByName[currentStrategyName]
-	return strategy.NextSelectCasesIndexes(upto)
+	return strategy.NextSelectCasesRankedIndexes(upto)
 }
 
 func (s *Dynamic) UpdateOnCaseSelected(index int) {

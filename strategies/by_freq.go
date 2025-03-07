@@ -12,12 +12,22 @@ type ByFreqRatio struct {
 	levels            []*level
 	origIndexToBucket map[int]*priorityBucket
 	disabledCases     map[int]int
+	withStrictOrder   bool
 }
 
 func NewByFreqRatio() *ByFreqRatio {
+	return newByFreqRatio(false)
+}
+
+func NewByFreqRatioWithStrictOrder() *ByFreqRatio {
+	return newByFreqRatio(true)
+}
+
+func newByFreqRatio(withStrictOrder bool) *ByFreqRatio {
 	return &ByFreqRatio{
 		origIndexToBucket: make(map[int]*priorityBucket),
 		disabledCases:     make(map[int]int),
+		withStrictOrder:   withStrictOrder,
 	}
 }
 
@@ -60,14 +70,40 @@ func (s *ByFreqRatio) InitializeWithTypeAssertion(freqRatios []interface{}) erro
 	return s.Initialize(freqRatiosInt)
 }
 
-func (s *ByFreqRatio) NextSelectCasesIndexes(upto int) ([]int, bool) {
-	res := make([]int, 0, upto)
+func (s *ByFreqRatio) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
+	if s.withStrictOrder {
+		return s.nextSelectCasesRankedIndexesWithStrictOrder(upto)
+	}
+	return s.nextSelectCasesRankedIndexesWithoutStrictOrder(upto)
+}
+
+func (s *ByFreqRatio) nextSelectCasesRankedIndexesWithStrictOrder(upto int) ([]RankedIndex, bool) {
+	res := make([]RankedIndex, 0, upto)
+	rank := 0
 	for i, level := range s.levels {
 		for j, b := range level.Buckets {
-			res = append(res, b.OrigChannelIndex)
+			rank++
+			res = append(res, RankedIndex{Index: b.OrigChannelIndex, Rank: rank})
 			if len(res) == upto {
 				return res, i == len(s.levels)-1 && j == len(level.Buckets)-1
 			}
+		}
+	}
+	return res, true
+}
+
+func (s *ByFreqRatio) nextSelectCasesRankedIndexesWithoutStrictOrder(upto int) ([]RankedIndex, bool) {
+	res := make([]RankedIndex, 0, upto)
+	rank := 0
+	for i, level := range s.levels {
+		rank++
+		j := 0
+		for _, b := range level.Buckets {
+			j++
+			res = append(res, RankedIndex{Index: b.OrigChannelIndex, Rank: rank})
+		}
+		if len(res) >= upto {
+			return res, i == len(s.levels)-1 && j == len(level.Buckets)-1
 		}
 	}
 	return res, true

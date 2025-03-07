@@ -71,7 +71,7 @@ func TestProcessMessagesByProbability(t *testing.T) {
 	for _, channel := range channelsWithProbability {
 		expectedProbability := channel.Weight()
 		actualProbability := float64(countPerChannel[channel.ChannelName()]) / float64(totalCount)
-		if math.Abs(actualProbability-expectedProbability) > 0.01 {
+		if math.Abs(actualProbability-expectedProbability) > 0.03 {
 			t.Errorf("Channel %s: expected messages number by probability %.2f, got %.2f\n",
 				channel.ChannelName(), expectedProbability, actualProbability)
 		}

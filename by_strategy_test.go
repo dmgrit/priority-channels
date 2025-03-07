@@ -82,7 +82,7 @@ func TestProcessMessagesByDynamicStrategy(t *testing.T) {
 	msgsChannels[2] = make(chan *Msg, 5)
 
 	strategiesByName := map[string]strategies.DynamicSubStrategy{
-		"DayTime":   strategies.NewByFreqRatio(),
+		"DayTime":   strategies.NewByFreqRatioWithStrictOrder(),
 		"NightTime": newByFirstDecimalDigitAsc(),
 	}
 	channels := []channels.ChannelWithWeight[*Msg, map[string]interface{}]{
@@ -345,10 +345,10 @@ func (s *byFirstDecimalDigit) InitializeWithTypeAssertion(priorities []interface
 	return s.Initialize(prioritiesFloat64)
 }
 
-func (s *byFirstDecimalDigit) NextSelectCasesIndexes(upto int) ([]int, bool) {
-	res := make([]int, 0, upto)
+func (s *byFirstDecimalDigit) NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool) {
+	res := make([]strategies.RankedIndex, 0, upto)
 	for i := 0; i < upto && i < len(s.sortedPriorities); i++ {
-		res = append(res, s.sortedPriorities[i].OriginalIndex)
+		res = append(res, strategies.RankedIndex{Index: s.sortedPriorities[i].OriginalIndex, Rank: i})
 	}
 	return res, len(res) == len(s.sortedPriorities)
 }

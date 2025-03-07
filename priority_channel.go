@@ -71,10 +71,9 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 }
 
 func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, channelName string, PathInTree []selectable.ChannelNode, status ReceiveStatus) {
-	currNumOfChannelsToProcess := 0
+	nextNumOfChannelsToProcess := 1
 	for {
-		currNumOfChannelsToProcess++
-		channelsSelectCases, isLastIteration, closedChannel := pc.compositeChannel.NextSelectCases(currNumOfChannelsToProcess)
+		channelsSelectCases, isLastIteration, closedChannel := pc.compositeChannel.NextSelectCases(nextNumOfChannelsToProcess)
 		if closedChannel != nil {
 			return getZero[T](), closedChannel.ChannelName, closedChannel.PathInTree, ReceivePriorityChannelClosed
 		}
@@ -82,8 +81,13 @@ func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDe
 			if isLastIteration {
 				return getZero[T](), "", nil, ReceiveNoOpenChannels
 			} else {
+				nextNumOfChannelsToProcess++
 				continue
 			}
+		} else if len(channelsSelectCases) <= nextNumOfChannelsToProcess {
+			nextNumOfChannelsToProcess++
+		} else {
+			nextNumOfChannelsToProcess = len(channelsSelectCases) + 1
 		}
 		chosen, recv, recvOk, selectStatus := pc.selectCasesOfNextIteration(
 			pc.ctx,

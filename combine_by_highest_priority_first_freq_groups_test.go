@@ -20,22 +20,23 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups(t *testing.T) {
 	msgsChannels[2] = make(chan *Msg, 15)
 	msgsChannels[3] = make(chan *Msg, 15)
 
+	options := priority_channels.WithFrequencyMethod(priority_channels.StrictOrderFully)
 	group1Priority1Channel, err := priority_channels.NewByFrequencyRatio[*Msg](ctx, []channels.ChannelWithFreqRatio[*Msg]{
 		channels.NewChannelWithFreqRatio("Priority-1", msgsChannels[0], 1),
 		channels.NewChannelWithFreqRatio("Priority-5", msgsChannels[1], 5),
-	})
+	}, options)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 	group2Priority2Channel, err := priority_channels.NewByFrequencyRatio[*Msg](ctx, []channels.ChannelWithFreqRatio[*Msg]{
 		channels.NewChannelWithFreqRatio("Priority-10", msgsChannels[2], 1),
-	})
+	}, options)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 	group3PriorityChannel, err := priority_channels.NewByFrequencyRatio[*Msg](ctx, []channels.ChannelWithFreqRatio[*Msg]{
 		channels.NewChannelWithFreqRatio("Priority-1000", msgsChannels[3], 1),
-	})
+	}, options)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -146,16 +147,17 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_MessagesInOneOfThe
 	msgsChannels[1] = make(chan *Msg, 7)
 	msgsChannels[2] = make(chan *Msg, 7)
 
+	options := priority_channels.WithFrequencyMethod(priority_channels.StrictOrderFully)
 	group1PriorityChannel, err := priority_channels.NewByFrequencyRatio[*Msg](ctx, []channels.ChannelWithFreqRatio[*Msg]{
 		channels.NewChannelWithFreqRatio("Priority-1", msgsChannels[0], 1),
 		channels.NewChannelWithFreqRatio("Priority-2", msgsChannels[1], 2),
-	})
+	}, options)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
 	group2PriorityChannel, err := priority_channels.NewByFrequencyRatio[*Msg](ctx, []channels.ChannelWithFreqRatio[*Msg]{
 		channels.NewChannelWithFreqRatio("Priority-3", msgsChannels[2], 1),
-	})
+	}, options)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}

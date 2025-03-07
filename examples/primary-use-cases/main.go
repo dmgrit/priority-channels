@@ -79,6 +79,7 @@ func main() {
 	}
 
 	var options []func(*priority_channels.PriorityChannelOptions)
+	options = append(options, priority_channels.WithFrequencyMethod(priority_channels.StrictOrderFully))
 	if len(os.Args) > 1 && os.Args[1] == "-a" {
 		options = append(options, priority_channels.AutoDisableClosedChannels())
 	}

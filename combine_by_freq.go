@@ -4,14 +4,17 @@ import (
 	"context"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
-	"github.com/dmgrit/priority-channels/strategies"
 )
 
 func CombineByFrequencyRatio[T any](ctx context.Context,
 	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
-	channels := toSelectableChannelsWithWeightByFreqRatio[T](priorityChannelsWithFreqRatio)
-	strategy := strategies.NewByFreqRatio()
+	strategy, probabilityStrategy := chooseFrequencyRatioStrategy(options...)
+	if probabilityStrategy != nil {
+		probabilityChannels := toProbabilitySelectableChannelsWithWeightByFreqRatio(priorityChannelsWithFreqRatio)
+		return newByStrategy(ctx, probabilityStrategy, probabilityChannels, options...)
+	}
+	channels := toSelectableChannelsWithWeightByFreqRatio(priorityChannelsWithFreqRatio)
 	return newByStrategy(ctx, strategy, channels, options...)
 }
 
@@ -47,6 +50,28 @@ func toSelectableChannelsWithWeightByFreqRatio[T any](
 	for _, q := range priorityChannelsWithFreqRatio {
 		priorityChannel := q.PriorityChannel()
 		res = append(res, asSelectableChannelWithWeight(priorityChannel, q.Name(), q.FreqRatio()))
+	}
+	return res
+}
+
+func toProbabilitySelectableChannelsWithWeightByFreqRatio[T any](
+	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T]) []selectable.ChannelWithWeight[T, float64] {
+	res := make([]selectable.ChannelWithWeight[T, float64], 0, len(priorityChannelsWithFreqRatio))
+	totalSum := 0.0
+	for _, c := range priorityChannelsWithFreqRatio {
+		totalSum += float64(c.FreqRatio())
+	}
+	accSum := 0.0
+	for i, c := range priorityChannelsWithFreqRatio {
+		var cprob float64
+		if i != len(priorityChannelsWithFreqRatio)-1 {
+			cprob = float64(c.FreqRatio()) / totalSum
+			accSum = accSum + cprob
+		} else {
+			cprob = 1.0 - accSum
+		}
+		res = append(res, asSelectableChannelWithWeight(
+			c.PriorityChannel(), c.Name(), cprob))
 	}
 	return res
 }

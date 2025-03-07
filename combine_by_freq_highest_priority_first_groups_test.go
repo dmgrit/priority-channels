@@ -68,7 +68,8 @@ func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups(t *testing.T) 
 		results = append(results, msg)
 	}
 
-	priorityChannel, err := priority_channels.CombineByFrequencyRatio(ctx, channels)
+	options := priority_channels.WithFrequencyMethod(priority_channels.StrictOrderFully)
+	priorityChannel, err := priority_channels.CombineByFrequencyRatio(ctx, channels, options)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand/v2"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +45,7 @@ func TestProcessMessagesByFrequencyRatio(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	priorityChannel, err := pc.NewByFrequencyRatio(ctx, channels)
+	priorityChannel, err := pc.NewByFrequencyRatio(ctx, channels, pc.WithFrequencyMethod(pc.StrictOrderFully))
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -113,6 +115,36 @@ func TestProcessMessagesByFrequencyRatio(t *testing.T) {
 }
 
 func TestProcessMessagesByFrequencyRatio_TenThousandMessages(t *testing.T) {
+	var testCases = []struct {
+		Name            string
+		FreqRatioMethod pc.FrequencyMethod
+	}{
+		{
+			Name:            "StrictOrderAcrossCycles",
+			FreqRatioMethod: pc.StrictOrderAcrossCycles,
+		},
+		{
+			Name:            "StrictOrderFully",
+			FreqRatioMethod: pc.StrictOrderFully,
+		},
+		{
+			Name:            "ProbabilisticWithCasesDuplications",
+			FreqRatioMethod: pc.ProbabilisticByCaseDuplication,
+		},
+		{
+			Name:            "ProbabilisticByMultipleRandCalls",
+			FreqRatioMethod: pc.ProbabilisticByMultipleRandCalls,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			testProcessMessagesByFrequencyRatioWithMethod(t, tc.FreqRatioMethod, 500)
+		})
+	}
+}
+
+func testProcessMessagesByFrequencyRatioWithMethod(t *testing.T, freqRatioMethod pc.FrequencyMethod, messagesNum int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var inputChannels []chan string
 
@@ -140,7 +172,7 @@ func TestProcessMessagesByFrequencyRatio_TenThousandMessages(t *testing.T) {
 
 	for i := 1; i <= channelsNum; i++ {
 		go func(i int) {
-			for j := 1; j <= 10000; j++ {
+			for j := 1; j <= messagesNum; j++ {
 				select {
 				case <-ctx.Done():
 					return
@@ -150,7 +182,7 @@ func TestProcessMessagesByFrequencyRatio_TenThousandMessages(t *testing.T) {
 		}(i)
 	}
 
-	ch, err := pc.NewByFrequencyRatio(ctx, channelsWithFreqRatio)
+	ch, err := pc.NewByFrequencyRatio(ctx, channelsWithFreqRatio, pc.WithFrequencyMethod(freqRatioMethod))
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
@@ -162,9 +194,10 @@ func TestProcessMessagesByFrequencyRatio_TenThousandMessages(t *testing.T) {
 			if !ok {
 				return
 			}
+			time.Sleep(1 * time.Microsecond)
 			totalCount++
 			countPerChannel[channel] = countPerChannel[channel] + 1
-			if totalCount == 10000 {
+			if totalCount == messagesNum {
 				cancel()
 				return
 			}
@@ -180,6 +213,655 @@ func TestProcessMessagesByFrequencyRatio_TenThousandMessages(t *testing.T) {
 			t.Errorf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
 				channel.ChannelName(), expectedRatio, actualRatio)
 		}
+		t.Logf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
+			channel.ChannelName(), expectedRatio, actualRatio)
+	}
+}
+
+func TestProcessMessagesByFrequencyRatio_TenThousandMessages2(t *testing.T) {
+	t.Skip()
+	var testCases = []struct {
+		Method          string
+		FreqRatioMethod pc.FrequencyMethod
+		MessagesRate    string
+	}{
+		{
+			Method:          "Priority Channel - StrictOrderAcrossCycles",
+			FreqRatioMethod: pc.StrictOrderAcrossCycles,
+			MessagesRate:    "Constant",
+		},
+		{
+			Method:          "Priority Channel - StrictOrderFully",
+			FreqRatioMethod: pc.StrictOrderFully,
+			MessagesRate:    "Constant",
+		},
+		{
+			Method:          "Priority Channel - ProbabilisticByCaseDuplication",
+			FreqRatioMethod: pc.ProbabilisticByCaseDuplication,
+			MessagesRate:    "Constant",
+		},
+		{
+			Method:          "Priority Channel - ProbabilisticByMultipleRandCalls",
+			FreqRatioMethod: pc.ProbabilisticByMultipleRandCalls,
+			MessagesRate:    "Constant",
+		},
+		{
+			Method:       "Select with Duplicate Cases",
+			MessagesRate: "Constant",
+		},
+		{
+			Method:          "Priority Channel - StrictOrderAcrossCycles",
+			FreqRatioMethod: pc.StrictOrderAcrossCycles,
+			MessagesRate:    "Random",
+		},
+		{
+			Method:          "Priority Channel - StrictOrderFully",
+			FreqRatioMethod: pc.StrictOrderFully,
+			MessagesRate:    "Random",
+		},
+		{
+			Method:          "Priority Channel - ProbabilisticByCaseDuplication",
+			FreqRatioMethod: pc.ProbabilisticByCaseDuplication,
+			MessagesRate:    "Random",
+		},
+		{
+			Method:          "Priority Channel - ProbabilisticByMultipleRandCalls",
+			FreqRatioMethod: pc.ProbabilisticByMultipleRandCalls,
+			MessagesRate:    "Random",
+		},
+		{
+			Method:       "Select with Duplicate Cases",
+			MessagesRate: "Random",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf(tc.Method+"-"+tc.MessagesRate), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			var inputChannels []chan string
+			var channelsWithFreqRatio []channels.ChannelWithFreqRatio[string]
+
+			channelsNum := 5
+			for i := 1; i <= channelsNum; i++ {
+				//inputChannels = append(inputChannels, make(chan string, 10000))
+				//inputChannels = append(inputChannels, make(chan string, 1000))
+				inputChannels = append(inputChannels, make(chan string))
+				channelsWithFreqRatio = append(channelsWithFreqRatio, channels.NewChannelWithFreqRatio(
+					fmt.Sprintf("Channel %d", i), inputChannels[i-1], i))
+			}
+
+			freqTotalSum := 0.0
+			for i := 1; i <= channelsNum; i++ {
+				freqTotalSum += float64(channelsWithFreqRatio[i-1].FreqRatio())
+			}
+			expectedRatios := make(map[string]float64)
+			for _, ch := range channelsWithFreqRatio {
+				expectedRatios[ch.ChannelName()] = float64(ch.FreqRatio()) / freqTotalSum
+			}
+
+			messagesNum := 100000
+			//messagesNum := 500
+
+			if tc.MessagesRate == "Constant" {
+				for i := 1; i <= channelsNum; i++ {
+					go func(i int) {
+						for j := 1; j <= messagesNum; j++ {
+							select {
+							case <-ctx.Done():
+								return
+							case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
+							}
+						}
+					}(i)
+				}
+			} else if tc.MessagesRate == "Random" {
+				go func() {
+					for j := 1; j <= messagesNum; j++ {
+						i := rand.IntN(channelsNum) + 1
+						select {
+						case <-ctx.Done():
+							return
+						case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
+						}
+					}
+				}()
+			}
+
+			startTime := time.Now()
+
+			totalCount := 0
+			countPerChannel := make(map[string]int)
+
+			if tc.Method == "Select with Duplicate Cases" {
+				//go func() {
+				//	for {
+				//		var channel string
+				//		select {
+				//		case <-ctx.Done():
+				//			return
+				//		case <-inputChannels[0]:
+				//			channel = "Channel A"
+				//		case <-inputChannels[1]:
+				//			channel = "Channel B"
+				//		case <-inputChannels[1]:
+				//			channel = "Channel B"
+				//		case <-inputChannels[2]:
+				//			channel = "Channel C"
+				//		case <-inputChannels[2]:
+				//			channel = "Channel C"
+				//		case <-inputChannels[2]:
+				//			channel = "Channel C"
+				//		case <-inputChannels[3]:
+				//			channel = "Channel D"
+				//		case <-inputChannels[3]:
+				//			channel = "Channel D"
+				//		case <-inputChannels[3]:
+				//			channel = "Channel D"
+				//		case <-inputChannels[3]:
+				//			channel = "Channel D"
+				//		}
+				//		totalCount++
+				//		countPerChannel[channel] = countPerChannel[channel] + 1
+				//		if totalCount == messagesNum {
+				//			cancel()
+				//			return
+				//		}
+				//		time.Sleep(100 * time.Microsecond)
+				//	}
+				//}()
+				selectCases := make([]reflect.SelectCase, 0, channelsNum+1)
+				selectCases = append(selectCases, reflect.SelectCase{
+					Dir:  reflect.SelectRecv,
+					Chan: reflect.ValueOf(ctx.Done()),
+				})
+				for i := 1; i <= channelsNum; i++ {
+					for j := 1; j <= i; j++ {
+						selectCases = append(selectCases, reflect.SelectCase{
+							Dir:  reflect.SelectRecv,
+							Chan: reflect.ValueOf(inputChannels[i-1]),
+						})
+					}
+				}
+
+				go func() {
+					for {
+						//rand.Shuffle(len(selectCases), func(i int, j int) {
+						//	selectCases[i], selectCases[j] = selectCases[j], selectCases[i]
+						//})
+						_, recv, recvOk := reflect.Select(selectCases)
+						if !recvOk {
+							return
+						}
+						channel, _ := recv.Interface().(string)
+						totalCount++
+						countPerChannel[channel] = countPerChannel[channel] + 1
+						if totalCount == messagesNum {
+							cancel()
+							return
+						}
+						time.Sleep(1 * time.Microsecond)
+					}
+				}()
+
+			} else if strings.HasPrefix(tc.Method, "Priority Channel") {
+				ch, _ := pc.NewByFrequencyRatio(ctx, channelsWithFreqRatio, pc.WithFrequencyMethod(tc.FreqRatioMethod))
+				go func() {
+					for {
+						_, channel, ok := ch.Receive()
+						if !ok {
+							return
+						}
+						time.Sleep(1 * time.Microsecond)
+						totalCount++
+						countPerChannel[channel] = countPerChannel[channel] + 1
+						if totalCount == messagesNum {
+							cancel()
+							return
+						}
+					}
+				}()
+			}
+
+			<-ctx.Done()
+
+			elapsedTime := time.Since(startTime)
+			t.Logf("Elapsed time: %v\n", elapsedTime)
+			//  1.832873667s    for 1M messages - freq ratio priority channel with 100 microseconds wait
+			//  1m57.941205209s for 1M messages - duplicated  channel with 100 microseconds wait
+			//  2.045487917s for 1M messages - freq ratio priority channel with 5 microseconds wait
+			//  4.171439583s for 1M messages - duplicated  channel with 1 microseconds wait
+
+			for _, channel := range channelsWithFreqRatio {
+				expectedRatio := expectedRatios[channel.ChannelName()]
+				actualRatio := float64(countPerChannel[channel.ChannelName()]) / float64(totalCount)
+				if math.Abs(expectedRatio-actualRatio) > 0.01 {
+					t.Errorf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
+						channel.ChannelName(), expectedRatio, actualRatio)
+				}
+			}
+		})
+	}
+}
+
+func TestProcessMessagesByFrequencyRatio_TenThousandMessages3(t *testing.T) {
+	t.Skip()
+	ctx, cancel := context.WithCancel(context.Background())
+	var inputChannels []chan string
+
+	channelsNum := 4
+	for i := 1; i <= channelsNum; i++ {
+		inputChannels = append(inputChannels, make(chan string))
+	}
+
+	channelsWithFreqRatio := []channels.ChannelWithFreqRatio[string]{
+		channels.NewChannelWithFreqRatio("Channel A", inputChannels[0], 1),
+		channels.NewChannelWithFreqRatio("Channel B", inputChannels[1], 2),
+		channels.NewChannelWithFreqRatio("Channel C", inputChannels[2], 3),
+		channels.NewChannelWithFreqRatio("Channel D", inputChannels[3], 4),
+		//channels.NewChannelWithFreqRatio("Channel E", inputChannels[4], 5),
+	}
+
+	freqTotalSum := 0.0
+	for i := 1; i <= channelsNum; i++ {
+		freqTotalSum += float64(channelsWithFreqRatio[i-1].FreqRatio())
+	}
+	expectedRatios := make(map[string]float64)
+	for _, ch := range channelsWithFreqRatio {
+		expectedRatios[ch.ChannelName()] = float64(ch.FreqRatio()) / freqTotalSum
+	}
+
+	for i := 1; i <= channelsNum; i++ {
+		go func(i int) {
+			for j := 1; j <= 10000; j++ {
+				select {
+				case <-ctx.Done():
+					return
+				case inputChannels[i-1] <- channelsWithFreqRatio[i-1].ChannelName():
+				}
+			}
+		}(i)
+	}
+
+	totalCount := 0
+	countPerChannel := make(map[string]int)
+
+	selectCases := make([]reflect.SelectCase, 0, channelsNum+1)
+	selectCases = append(selectCases, reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(ctx.Done()),
+	})
+	for i := 1; i <= channelsNum; i++ {
+		for j := 1; j <= i; j++ {
+			selectCases = append(selectCases, reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(inputChannels[i-1]),
+			})
+		}
+	}
+
+	go func() {
+		for {
+			rand.Shuffle(len(selectCases), func(i int, j int) {
+				selectCases[i], selectCases[j] = selectCases[j], selectCases[i]
+			})
+			_, recv, recvOk := reflect.Select(selectCases)
+			if !recvOk {
+				return
+			}
+			channel, _ := recv.Interface().(string)
+			totalCount++
+			countPerChannel[channel] = countPerChannel[channel] + 1
+			if totalCount == 10000 {
+				cancel()
+				return
+			}
+		}
+	}()
+
+	//ch, _ := pc.NewByFrequencyRatio(ctx, channelsWithFreqRatio)
+	//go func() {
+	//	for {
+	//		_, channel, ok := ch.Receive()
+	//		if !ok {
+	//			return
+	//		}
+	//		totalCount++
+	//		countPerChannel[channel] = countPerChannel[channel] + 1
+	//		if totalCount == 10000 {
+	//			cancel()
+	//			return
+	//		}
+	//	}
+	//}()
+
+	<-ctx.Done()
+
+	for _, channel := range channelsWithFreqRatio {
+		expectedRatio := expectedRatios[channel.ChannelName()]
+		actualRatio := float64(countPerChannel[channel.ChannelName()]) / float64(totalCount)
+		if math.Abs(expectedRatio-actualRatio) > 0.03 {
+			t.Errorf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
+				channel.ChannelName(), expectedRatio, actualRatio)
+		}
+	}
+}
+
+func TestProcessMessagesByFrequencyRatio_TenThousandMessages4(t *testing.T) {
+	t.Skip()
+	var testCases = []struct {
+		Method          string
+		FreqRatioMethod pc.FrequencyMethod
+		MessagesRate    string
+	}{
+		{
+			Method:          "Priority Channel - StrictOrderAcrossCycles",
+			FreqRatioMethod: pc.StrictOrderAcrossCycles,
+			MessagesRate:    "Constant",
+		},
+		{
+			Method:          "Priority Channel - StrictOrderFully",
+			FreqRatioMethod: pc.StrictOrderFully,
+			MessagesRate:    "Constant",
+		},
+		{
+			Method:          "Priority Channel - ProbabilisticByCaseDuplication",
+			FreqRatioMethod: pc.ProbabilisticByCaseDuplication,
+			MessagesRate:    "Constant",
+		},
+		{
+			Method:          "Priority Channel - ProbabilisticByMultipleRandCalls",
+			FreqRatioMethod: pc.ProbabilisticByMultipleRandCalls,
+			MessagesRate:    "Constant",
+		},
+		{
+			Method:       "Select with Duplicate Cases",
+			MessagesRate: "Constant",
+		},
+		{
+			Method:          "Priority Channel - StrictOrderAcrossCycles",
+			FreqRatioMethod: pc.StrictOrderAcrossCycles,
+			MessagesRate:    "Random",
+		},
+		{
+			Method:          "Priority Channel - StrictOrderFully",
+			FreqRatioMethod: pc.StrictOrderFully,
+			MessagesRate:    "Random",
+		},
+		{
+			Method:          "Priority Channel - ProbabilisticByCaseDuplication",
+			FreqRatioMethod: pc.ProbabilisticByCaseDuplication,
+			MessagesRate:    "Random",
+		},
+		{
+			Method:          "Priority Channel - ProbabilisticByMultipleRandCalls",
+			FreqRatioMethod: pc.ProbabilisticByMultipleRandCalls,
+			MessagesRate:    "Random",
+		},
+		{
+			Method:       "Select with Duplicate Cases",
+			MessagesRate: "Random",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf(tc.Method+"-"+tc.MessagesRate), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			var inputChannels []chan string
+			channelsNum := 2
+			for i := 1; i <= channelsNum; i++ {
+				inputChannels = append(inputChannels, make(chan string))
+			}
+			channelsWithFreqRatio := []channels.ChannelWithFreqRatio[string]{
+				channels.NewChannelWithFreqRatio("Channel 1", inputChannels[0], 37),
+				channels.NewChannelWithFreqRatio("Channel 2", inputChannels[1], 63),
+			}
+
+			freqTotalSum := 0.0
+			for i := 1; i <= channelsNum; i++ {
+				freqTotalSum += float64(channelsWithFreqRatio[i-1].FreqRatio())
+			}
+			expectedRatios := make(map[string]float64)
+			for _, ch := range channelsWithFreqRatio {
+				expectedRatios[ch.ChannelName()] = float64(ch.FreqRatio()) / freqTotalSum
+			}
+
+			messagesNum := 10000
+			//messagesNum := 500
+
+			if tc.MessagesRate == "Constant" {
+				for i := 1; i <= channelsNum; i++ {
+					go func(i int) {
+						for j := 1; j <= messagesNum; j++ {
+							select {
+							case <-ctx.Done():
+								return
+							case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
+							}
+						}
+					}(i)
+				}
+			} else if tc.MessagesRate == "Random" {
+				go func() {
+					for j := 1; j <= messagesNum; j++ {
+						i := rand.IntN(channelsNum) + 1
+						select {
+						case <-ctx.Done():
+							return
+						case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
+						}
+					}
+				}()
+			}
+
+			startTime := time.Now()
+
+			totalCount := 0
+			countPerChannel := make(map[string]int)
+
+			if tc.Method == "Select with Duplicate Cases" {
+				selectCases := make([]reflect.SelectCase, 0, channelsNum+1)
+				selectCases = append(selectCases, reflect.SelectCase{
+					Dir:  reflect.SelectRecv,
+					Chan: reflect.ValueOf(ctx.Done()),
+				})
+				for i := 1; i <= channelsNum; i++ {
+					for j := 1; j <= i; j++ {
+						selectCases = append(selectCases, reflect.SelectCase{
+							Dir:  reflect.SelectRecv,
+							Chan: reflect.ValueOf(inputChannels[i-1]),
+						})
+					}
+				}
+				go func() {
+					for {
+						_, recv, recvOk := reflect.Select(selectCases)
+						if !recvOk {
+							return
+						}
+						channel, _ := recv.Interface().(string)
+						totalCount++
+						countPerChannel[channel] = countPerChannel[channel] + 1
+						if totalCount == messagesNum {
+							cancel()
+							return
+						}
+						time.Sleep(5 * time.Microsecond)
+					}
+				}()
+
+			} else if strings.HasPrefix(tc.Method, "Priority Channel") {
+				ch, _ := pc.NewByFrequencyRatio(ctx, channelsWithFreqRatio, pc.WithFrequencyMethod(tc.FreqRatioMethod))
+				go func() {
+					for {
+						_, channel, ok := ch.Receive()
+						if !ok {
+							return
+						}
+						time.Sleep(5 * time.Microsecond)
+						totalCount++
+						countPerChannel[channel] = countPerChannel[channel] + 1
+						if totalCount == messagesNum {
+							cancel()
+							return
+						}
+					}
+				}()
+			}
+
+			<-ctx.Done()
+
+			elapsedTime := time.Since(startTime)
+			t.Logf("Elapsed time: %v\n", elapsedTime)
+
+			for _, channel := range channelsWithFreqRatio {
+				expectedRatio := expectedRatios[channel.ChannelName()]
+				actualRatio := float64(countPerChannel[channel.ChannelName()]) / float64(totalCount)
+				if math.Abs(expectedRatio-actualRatio) > 0.01 {
+					t.Errorf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
+						channel.ChannelName(), expectedRatio, actualRatio)
+				}
+			}
+		})
+	}
+}
+
+func TestProcessMessagesByFrequencyRatio_HighPriorityAlwaysFirstOverDistinctNumberOfPriorities(t *testing.T) {
+	t.Skip()
+	var testCaseChannelsNum = []int{5, 10, 50, 100, 250, 500, 1000}
+
+	for _, tc := range testCaseChannelsNum {
+		t.Run(fmt.Sprintf("Channels num - %d", tc), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+
+			var inputChannels []chan string
+			var channelsWithPriority []channels.ChannelWithPriority[string]
+
+			channelsNum := tc
+			for i := 1; i <= channelsNum; i++ {
+				//inputChannels = append(inputChannels, make(chan string, 10000))
+				//inputChannels = append(inputChannels, make(chan string, 1000))
+				inputChannels = append(inputChannels, make(chan string))
+				channelsWithPriority = append(channelsWithPriority, channels.NewChannelWithPriority(
+					fmt.Sprintf("Channel %d", i), inputChannels[i-1], i))
+			}
+
+			messagesNum := 1000
+			//messagesNum := 100000
+			//messagesNum := 500
+
+			go func() {
+				for j := 1; j <= messagesNum; j++ {
+					select {
+					case <-ctx.Done():
+						return
+					case inputChannels[0] <- fmt.Sprintf("New message"):
+					}
+				}
+			}()
+
+			startTime := time.Now()
+
+			totalCount := 0
+			countPerChannel := make(map[string]int)
+
+			ch, _ := pc.NewByHighestAlwaysFirst(ctx, channelsWithPriority)
+			go func() {
+				for {
+					_, channel, ok := ch.Receive()
+					if !ok {
+						return
+					}
+					time.Sleep(5 * time.Microsecond)
+					totalCount++
+					countPerChannel[channel] = countPerChannel[channel] + 1
+					if totalCount == messagesNum {
+						cancel()
+						return
+					}
+				}
+			}()
+
+			<-ctx.Done()
+
+			elapsedTime := time.Since(startTime)
+			t.Logf("Elapsed time: %v\n", elapsedTime)
+		})
+	}
+}
+
+func TestProcessMessagesByFrequencyRatio_SingleSelectCaseOverLargeNumberOfChannels(t *testing.T) {
+	t.Skip()
+	var testCaseChannelsNum = []int{5, 10, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 20000, 25000, 65000, 70000}
+
+	for _, tc := range testCaseChannelsNum {
+		t.Run(fmt.Sprintf("Channels num - %d", tc), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+
+			var inputChannels []chan string
+			var channelsWithPriority []channels.ChannelWithPriority[string]
+
+			channelsNum := tc
+			for i := 1; i <= channelsNum; i++ {
+				//inputChannels = append(inputChannels, make(chan string, 10000))
+				//inputChannels = append(inputChannels, make(chan string, 1000))
+				inputChannels = append(inputChannels, make(chan string))
+				channelsWithPriority = append(channelsWithPriority, channels.NewChannelWithPriority(
+					fmt.Sprintf("Channel %d", i), inputChannels[i-1], i))
+			}
+
+			messagesNum := 1000
+			//messagesNum := 500
+
+			go func() {
+				for j := 1; j <= messagesNum; j++ {
+					i := rand.IntN(channelsNum) + 1
+					select {
+					case <-ctx.Done():
+						return
+					case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
+					}
+				}
+			}()
+
+			startTime := time.Now()
+
+			totalCount := 0
+			countPerChannel := make(map[string]int)
+
+			selectCases := make([]reflect.SelectCase, 0, channelsNum+1)
+			selectCases = append(selectCases, reflect.SelectCase{
+				Dir:  reflect.SelectRecv,
+				Chan: reflect.ValueOf(ctx.Done()),
+			})
+			for i := 1; i <= channelsNum; i++ {
+				selectCases = append(selectCases, reflect.SelectCase{
+					Dir:  reflect.SelectRecv,
+					Chan: reflect.ValueOf(inputChannels[i-1]),
+				})
+			}
+
+			go func() {
+				for {
+					_, recv, recvOk := reflect.Select(selectCases)
+					if !recvOk {
+						return
+					}
+					channel, _ := recv.Interface().(string)
+					totalCount++
+					countPerChannel[channel] = countPerChannel[channel] + 1
+					if totalCount == messagesNum {
+						cancel()
+						return
+					}
+					time.Sleep(5 * time.Microsecond)
+				}
+			}()
+
+			<-ctx.Done()
+
+			elapsedTime := time.Since(startTime)
+			t.Logf("Elapsed time: %v\n", elapsedTime)
+		})
 	}
 }
 
@@ -292,7 +974,7 @@ func TestProcessMessagesByFrequencyRatio_MessagesInOneOfTheChannelsArriveAfterSo
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	priorityChannel, err := pc.NewByFrequencyRatio(ctx, channels)
+	priorityChannel, err := pc.NewByFrequencyRatio(ctx, channels, pc.WithFrequencyMethod(pc.StrictOrderFully))
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}

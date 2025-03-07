@@ -79,7 +79,7 @@ func (s *ByProbability) InitializeWithTypeAssertion(probabilities []interface{})
 	return s.Initialize(probabilitiesFloat64)
 }
 
-func (s *ByProbability) NextSelectCasesIndexes(upto int) ([]int, bool) {
+func (s *ByProbability) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
 	if len(s.pendingProbabilities) > 0 {
 		i := 0
 		if len(s.pendingProbabilities) > 1 {
@@ -93,9 +93,9 @@ func (s *ByProbability) NextSelectCasesIndexes(upto int) ([]int, bool) {
 		s.readjustSortedProbabilitySelectionsList(s.pendingProbabilities)
 	}
 
-	res := make([]int, 0, upto)
+	res := make([]RankedIndex, 0, upto)
 	for i := 0; i < upto && i < len(s.currSelectedIndexes); i++ {
-		res = append(res, s.currSelectedIndexes[i])
+		res = append(res, RankedIndex{Index: s.currSelectedIndexes[i], Rank: i + 1})
 	}
 	return res, len(s.pendingProbabilities) == 0 && len(res) == len(s.currSelectedIndexes)
 }

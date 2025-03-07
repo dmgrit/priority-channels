@@ -22,10 +22,10 @@ func main() {
 	msgsChannels[1] = make(chan string)
 
 	strategiesByName := map[string]strategies.DynamicSubStrategy{
-		"Regular":              strategies.NewByFreqRatio(),
-		"A-Reserved":           strategies.NewByFreqRatio(),
+		"Regular":              strategies.NewByFreqRatioWithStrictOrder(),
+		"A-Reserved":           strategies.NewByFreqRatioWithStrictOrder(),
 		"A-Reserved-Exclusive": strategies.NewByHighestAlwaysFirst(),
-		"B-Reserved":           strategies.NewByFreqRatio(),
+		"B-Reserved":           strategies.NewByFreqRatioWithStrictOrder(),
 		"B-Reserved-Exclusive": strategies.NewByHighestAlwaysFirst(),
 	}
 	channelsWithWeights := []channels.ChannelWithWeight[string, map[string]interface{}]{

@@ -56,15 +56,67 @@ func (s *HighestAlwaysFirst) InitializeWithTypeAssertion(priorities []interface{
 	return s.Initialize(prioritiesInt)
 }
 
-func (s *HighestAlwaysFirst) NextSelectCasesIndexes(upto int) ([]int, bool) {
-	res := make([]int, 0, upto)
-	for i := 0; i < upto && i < len(s.sortedPriorities); i++ {
-		res = append(res, s.sortedPriorities[i].OriginalIndex)
+type RankedIndex struct {
+	Index int
+	Rank  int
+}
+
+func (s *HighestAlwaysFirst) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
+	res := make([]RankedIndex, 0, upto)
+	numDistinct := 0
+	prevPriority := 0
+	for i := 0; i < len(s.sortedPriorities); i++ {
+		if s.sortedPriorities[i].Priority != prevPriority {
+			numDistinct++
+			if len(res) >= upto {
+				return res, len(res) == len(s.sortedPriorities)
+			}
+			prevPriority = s.sortedPriorities[i].Priority
+		}
+		res = append(res, RankedIndex{
+			Index: s.sortedPriorities[i].OriginalIndex,
+			Rank:  numDistinct,
+		})
 	}
 	return res, len(res) == len(s.sortedPriorities)
 }
 
+//func (s *HighestAlwaysFirst) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
+//	res := make([]RankedIndex, 0, upto)
+//	for i := 0; i < upto && i < len(s.sortedPriorities); i++ {
+//		res = append(res, RankedIndex{
+//			Index: s.sortedPriorities[i].OriginalIndex,
+//			Rank:  1,
+//		})
+//	}
+//	return res, len(res) == len(s.sortedPriorities)
+//}
+
 func (s *HighestAlwaysFirst) UpdateOnCaseSelected(index int) {}
+
+//func (s *HighestAlwaysFirst) UpdateOnCaseSelected(index int) {
+//	startShuffleIndex, finishShuffleIndex := -1, -1
+//	for i := 1; i <= len(s.sortedPriorities)-1; i++ {
+//		if startShuffleIndex == -1 && s.sortedPriorities[i].Priority == s.sortedPriorities[i-1].Priority {
+//			startShuffleIndex = i - 1
+//		}
+//		if startShuffleIndex != -1 && s.sortedPriorities[i].Priority != s.sortedPriorities[i-1].Priority {
+//			finishShuffleIndex = i - 1
+//			shuffle(s.sortedPriorities[startShuffleIndex : finishShuffleIndex+1])
+//			startShuffleIndex = -1
+//		}
+//	}
+//	if startShuffleIndex != -1 {
+//		shuffle(s.sortedPriorities[startShuffleIndex:])
+//	}
+//}
+
+//func shuffle(a []sortedToOriginalIndex) {
+//	for i := len(a) - 1; i > 0; i-- {
+//		j := int(rand.Uint64N(uint64(i + 1)))
+//		a[i], a[j] = a[j], a[i]
+//	}
+//}
 
 func (s *HighestAlwaysFirst) DisableSelectCase(index int) {
 	if index < 0 || index > len(s.origPriorities)-1 {
