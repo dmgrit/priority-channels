@@ -362,67 +362,85 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_CustomWaitInterval(t *t
 }
 
 func TestProcessMessagesByPriorityWithHighestAlwaysFirst_AutoDisableClosedChannels(t *testing.T) {
-	ctx := context.Background()
-
-	urgentMessagesC := make(chan string)
-	highPriorityC := make(chan string)
-	lowPriorityC := make(chan string)
-
-	// sending messages to individual channels
-	go func() {
-		for i := 1; i <= 20; i++ {
-			highPriorityC <- fmt.Sprintf("high priority message %d", i)
-		}
-		close(highPriorityC)
-	}()
-	go func() {
-		for i := 1; i <= 20; i++ {
-			lowPriorityC <- fmt.Sprintf("low priority message %d", i)
-		}
-		close(lowPriorityC)
-	}()
-	go func() {
-		for i := 1; i <= 20; i++ {
-			urgentMessagesC <- fmt.Sprintf("urgent message %d", i)
-		}
-		close(urgentMessagesC)
-	}()
-
-	channelsWithPriority := []channels.ChannelWithPriority[string]{
-		channels.NewChannelWithPriority(
-			"High Priority",
-			highPriorityC,
-			8),
-		channels.NewChannelWithPriority(
-			"Low Priority",
-			lowPriorityC,
-			3),
-		channels.NewChannelWithPriority(
-			"Urgent Messages",
-			urgentMessagesC,
-			10),
-	}
-	ch, err := pc.NewByHighestAlwaysFirst(ctx, channelsWithPriority, pc.AutoDisableClosedChannels())
-	if err != nil {
-		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	testCases := []struct {
+		name       string
+		priorities []int
+	}{
+		{
+			name:       "different priorities",
+			priorities: []int{8, 3, 1},
+		},
+		{
+			name:       "same priorities",
+			priorities: []int{5, 5, 5},
+		},
 	}
 
-	receivedMessagesCount := 0
-	for {
-		message, channelName, status := ch.ReceiveWithContext(context.Background())
-		if status != pc.ReceiveSuccess {
-			if receivedMessagesCount != 60 {
-				t.Errorf("Expected to receive 60 messages, but got %d", receivedMessagesCount)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			urgentMessagesC := make(chan string)
+			highPriorityC := make(chan string)
+			lowPriorityC := make(chan string)
+
+			// sending messages to individual channels
+			go func() {
+				for i := 1; i <= 20; i++ {
+					highPriorityC <- fmt.Sprintf("high priority message %d", i)
+				}
+				close(highPriorityC)
+			}()
+			go func() {
+				for i := 1; i <= 20; i++ {
+					lowPriorityC <- fmt.Sprintf("low priority message %d", i)
+				}
+				close(lowPriorityC)
+			}()
+			go func() {
+				for i := 1; i <= 20; i++ {
+					urgentMessagesC <- fmt.Sprintf("urgent message %d", i)
+				}
+				close(urgentMessagesC)
+			}()
+
+			channelsWithPriority := []channels.ChannelWithPriority[string]{
+				channels.NewChannelWithPriority(
+					"High Priority",
+					highPriorityC,
+					tc.priorities[0]),
+				channels.NewChannelWithPriority(
+					"Low Priority",
+					lowPriorityC,
+					tc.priorities[1]),
+				channels.NewChannelWithPriority(
+					"Urgent Messages",
+					urgentMessagesC,
+					tc.priorities[2]),
 			}
-			if status != pc.ReceiveNoOpenChannels {
-				t.Errorf("Expected to receive 'no open channels' status on closure (%v), but got %v",
-					pc.ReceiveNoOpenChannels, status)
+			ch, err := pc.NewByHighestAlwaysFirst(ctx, channelsWithPriority, pc.AutoDisableClosedChannels())
+			if err != nil {
+				t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 			}
-			break
-		}
-		receivedMessagesCount++
-		fmt.Printf("%s: %s\n", channelName, message)
-		time.Sleep(10 * time.Millisecond)
+
+			receivedMessagesCount := 0
+			for {
+				message, channelName, status := ch.ReceiveWithContext(context.Background())
+				if status != pc.ReceiveSuccess {
+					if receivedMessagesCount != 60 {
+						t.Errorf("Expected to receive 60 messages, but got %d", receivedMessagesCount)
+					}
+					if status != pc.ReceiveNoOpenChannels {
+						t.Errorf("Expected to receive 'no open channels' status on closure (%v), but got %v",
+							pc.ReceiveNoOpenChannels, status)
+					}
+					break
+				}
+				receivedMessagesCount++
+				fmt.Printf("%s: %s\n", channelName, message)
+				time.Sleep(10 * time.Millisecond)
+			}
+		})
 	}
 }
 
