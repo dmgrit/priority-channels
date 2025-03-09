@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
+	psync "github.com/dmgrit/priority-channels/internal/synchronization"
 )
 
 type PriorityChannel[T any] struct {
@@ -13,8 +14,8 @@ type PriorityChannel[T any] struct {
 	ctxCancel                   context.CancelFunc
 	compositeChannel            selectable.Channel[T]
 	channelReceiveWaitInterval  *time.Duration
-	lock                        *lock
-	blockWaitAllChannelsTracker *repeatingStateTracker
+	lock                        *psync.Lock
+	blockWaitAllChannelsTracker *psync.RepeatingStateTracker
 }
 
 func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.Channel[T], options ...func(*PriorityChannelOptions)) *PriorityChannel[T] {
@@ -23,11 +24,11 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 		option(pcOptions)
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	var l *lock
-	var blockWaitAllChannelsTracker *repeatingStateTracker
+	var l *psync.Lock
+	var blockWaitAllChannelsTracker *psync.RepeatingStateTracker
 	if pcOptions.isSynchronized != nil && *pcOptions.isSynchronized {
-		l = newLock()
-		blockWaitAllChannelsTracker = newRepeatingStateTracker()
+		l = psync.NewLock()
+		blockWaitAllChannelsTracker = psync.NewRepeatingStateTracker()
 	}
 	return &PriorityChannel[T]{
 		ctx:                         ctx,
@@ -64,27 +65,13 @@ func (pc *PriorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, ch
 
 func (pc *PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus) {
 	if pc.lock != nil {
-		gotLock := pc.waitForLockOrExitOnBlockWaitAllChannels()
+		gotLock := psync.TryLockOrExitOnState(pc.lock, pc.blockWaitAllChannelsTracker)
 		if !gotLock {
 			return getZero[T](), "", ReceiveDefaultCase
 		}
 		defer pc.lock.Unlock()
 	}
 	return pc.receiveSingleMessage(context.Background(), true)
-}
-
-func (pc *PriorityChannel[T]) waitForLockOrExitOnBlockWaitAllChannels() bool {
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		if pc.blockWaitAllChannelsTracker.Await(ctx) {
-			cancel()
-		}
-	}()
-	if !pc.lock.TryLockWithContext(ctx) {
-		return false
-	}
-	cancel()
-	return true
 }
 
 func (pc *PriorityChannel[T]) Close() {
