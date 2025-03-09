@@ -9,10 +9,12 @@ import (
 )
 
 type PriorityChannel[T any] struct {
-	ctx                        context.Context
-	ctxCancel                  context.CancelFunc
-	compositeChannel           selectable.Channel[T]
-	channelReceiveWaitInterval *time.Duration
+	ctx                         context.Context
+	ctxCancel                   context.CancelFunc
+	compositeChannel            selectable.Channel[T]
+	channelReceiveWaitInterval  *time.Duration
+	lock                        *lock
+	blockWaitAllChannelsTracker *repeatingStateTracker
 }
 
 func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.Channel[T], options ...func(*PriorityChannelOptions)) *PriorityChannel[T] {
@@ -21,15 +23,27 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 		option(pcOptions)
 	}
 	ctx, cancel := context.WithCancel(ctx)
+	var l *lock
+	var blockWaitAllChannelsTracker *repeatingStateTracker
+	if pcOptions.isSynchronized != nil && *pcOptions.isSynchronized {
+		l = newLock()
+		blockWaitAllChannelsTracker = newRepeatingStateTracker()
+	}
 	return &PriorityChannel[T]{
-		ctx:                        ctx,
-		ctxCancel:                  cancel,
-		compositeChannel:           compositeChannel,
-		channelReceiveWaitInterval: pcOptions.channelReceiveWaitInterval,
+		ctx:                         ctx,
+		ctxCancel:                   cancel,
+		compositeChannel:            compositeChannel,
+		channelReceiveWaitInterval:  pcOptions.channelReceiveWaitInterval,
+		lock:                        l,
+		blockWaitAllChannelsTracker: blockWaitAllChannelsTracker,
 	}
 }
 
 func (pc *PriorityChannel[T]) Receive() (msg T, channelName string, ok bool) {
+	if pc.lock != nil {
+		pc.lock.Lock()
+		defer pc.lock.Unlock()
+	}
 	msg, channelName, status := pc.receiveSingleMessage(context.Background(), false)
 	if status != ReceiveSuccess {
 		return getZero[T](), channelName, false
@@ -38,11 +52,39 @@ func (pc *PriorityChannel[T]) Receive() (msg T, channelName string, ok bool) {
 }
 
 func (pc *PriorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus) {
+	if pc.lock != nil {
+		gotLock := pc.lock.TryLockWithContext(ctx)
+		if !gotLock {
+			return getZero[T](), "", ReceiveContextCancelled
+		}
+		defer pc.lock.Unlock()
+	}
 	return pc.receiveSingleMessage(ctx, false)
 }
 
 func (pc *PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus) {
+	if pc.lock != nil {
+		gotLock := pc.waitForLockOrExitOnBlockWaitAllChannels()
+		if !gotLock {
+			return getZero[T](), "", ReceiveDefaultCase
+		}
+		defer pc.lock.Unlock()
+	}
 	return pc.receiveSingleMessage(context.Background(), true)
+}
+
+func (pc *PriorityChannel[T]) waitForLockOrExitOnBlockWaitAllChannels() bool {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		if pc.blockWaitAllChannelsTracker.Await(ctx) {
+			cancel()
+		}
+	}()
+	if !pc.lock.TryLockWithContext(ctx) {
+		return false
+	}
+	cancel()
+	return true
 }
 
 func (pc *PriorityChannel[T]) Close() {
@@ -94,6 +136,7 @@ func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDe
 			ctx,
 			channelsSelectCases,
 			isLastIteration,
+			false,
 			withDefaultCase,
 			pc.channelReceiveWaitInterval)
 		if selectStatus == ReceiveStatusUnknown {
@@ -119,8 +162,13 @@ func (pc *PriorityChannel[T]) selectCasesOfNextIteration(
 	currRequestContext context.Context,
 	channelsSelectCases []selectable.SelectCase[T],
 	isLastIteration bool,
+	blockWaitAllChannels bool,
 	withDefaultCase bool,
 	channelReceiveWaitInterval *time.Duration) (chosen int, recv reflect.Value, recvOk bool, status ReceiveStatus) {
+	if blockWaitAllChannels && pc.blockWaitAllChannelsTracker != nil {
+		pc.blockWaitAllChannelsTracker.Broadcast()
+		defer pc.blockWaitAllChannelsTracker.Reset()
+	}
 
 	selectCases := make([]reflect.SelectCase, 0, len(channelsSelectCases)+3)
 	selectCases = append(selectCases, reflect.SelectCase{
@@ -137,7 +185,7 @@ func (pc *PriorityChannel[T]) selectCasesOfNextIteration(
 			Chan: reflect.ValueOf(sc.MsgsC),
 		})
 	}
-	if !isLastIteration || withDefaultCase {
+	if !isLastIteration || withDefaultCase || !blockWaitAllChannels {
 		selectCases = append(selectCases, getDefaultSelectCaseWithWaitInterval(channelReceiveWaitInterval))
 	}
 
@@ -155,6 +203,12 @@ func (pc *PriorityChannel[T]) selectCasesOfNextIteration(
 			// Default case - go to next iteration to increase the range of allowed minimal priority channels
 			// on last iteration - blocking wait on all receive channels without default case
 			return chosen, recv, recvOk, ReceiveStatusUnknown
+		} else if !blockWaitAllChannels {
+			// last call is block wait on all channels
+			blockWaitAllChannels = true
+			return pc.selectCasesOfNextIteration(
+				priorityChannelContext, currRequestContext, channelsSelectCases, isLastIteration,
+				blockWaitAllChannels, withDefaultCase, channelReceiveWaitInterval)
 		} else if withDefaultCase {
 			return chosen, recv, recvOk, ReceiveDefaultCase
 		}
