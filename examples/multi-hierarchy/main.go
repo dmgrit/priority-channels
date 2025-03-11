@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dmgrit/priority-channels"
@@ -84,7 +85,7 @@ func main() {
 
 	ch, err := priority_channels.CombineByHighestAlwaysFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
 		priority_channels.NewPriorityChannelWithPriority(
-			"Combined Users and Message Types",
+			"Customer Messages",
 			combinedUsersAndMessageTypesPriorityChannel,
 			1),
 		priority_channels.NewPriorityChannelWithPriority(
@@ -99,6 +100,7 @@ func main() {
 	fmt.Printf("- Press 'H/NH' to start/stop receiving high priority messages\n")
 	fmt.Printf("- Press 'L/NL' to start/stop receiving low priority messages\n")
 	fmt.Printf("- Press 'U/NU' to start/stop receiving urgent messages\n")
+	fmt.Printf("- Press 'D/ND' to start/stop presenting receive path in tree\n")
 	fmt.Printf("- Press 0 to exit\n\n")
 
 	for i := 1; i <= len(inputChannels); i++ {
@@ -134,6 +136,8 @@ func main() {
 		}(i)
 	}
 
+	var presentDetails atomic.Bool
+
 	go func() {
 		f, err := os.Create("/tmp/priority_channels_demo.txt")
 		if err != nil {
@@ -142,20 +146,29 @@ func main() {
 			return
 		}
 		defer f.Close()
-		prevChannel := ""
+		prevFullChannelPath := ""
 		streakLength := 0
 
 		for {
 			ctx := context.Background()
-			_, channel, status := ch.ReceiveWithContext(ctx)
+			_, details, status := ch.ReceiveWithContextEx(ctx)
+			fullChannelPath := ""
+			if presentDetails.Load() {
+				for _, channelNode := range details.PathInTree {
+					fullChannelPath += fmt.Sprintf("%s [%d] -> ", channelNode.ChannelName, channelNode.ChannelIndex)
+				}
+				fullChannelPath = fullChannelPath + fmt.Sprintf("%s [%d]", details.ChannelName, details.ChannelIndex)
+			} else {
+				fullChannelPath = details.ChannelName
+			}
 			if status == priority_channels.ReceiveSuccess {
-				if channel == prevChannel {
+				if fullChannelPath == prevFullChannelPath {
 					streakLength++
 				} else {
 					streakLength = 1
 				}
-				prevChannel = channel
-				logMessage := fmt.Sprintf("%s (%d)\n", channel, streakLength)
+				prevFullChannelPath = fullChannelPath
+				logMessage := fmt.Sprintf("%s (%d)\n", fullChannelPath, streakLength)
 
 				_, err := f.WriteString(logMessage)
 				if err != nil {
@@ -164,7 +177,7 @@ func main() {
 					break
 				}
 			} else if status == priority_channels.ReceiveChannelClosed {
-				_, err := f.WriteString(fmt.Sprintf("Channel '%s' is closed\n", channel))
+				_, err := f.WriteString(fmt.Sprintf("Channel '%s' is closed\n", fullChannelPath))
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)
 					cancel()
@@ -172,10 +185,10 @@ func main() {
 				}
 			} else if status == priority_channels.ReceivePriorityChannelClosed {
 				var err error
-				if channel == "" {
+				if fullChannelPath == "" {
 					_, err = f.WriteString(fmt.Sprintf("Priority Channel is closed\n"))
 				} else {
-					_, err = f.WriteString(fmt.Sprintf("Priority Channel '%s' is closed\n", channel))
+					_, err = f.WriteString(fmt.Sprintf("Priority Channel '%s' is closed\n", fullChannelPath))
 				}
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)
@@ -190,7 +203,7 @@ func main() {
 					break
 				}
 			} else {
-				_, err := f.WriteString(fmt.Sprintf("Unexpected status %s\n", channel))
+				_, err := f.WriteString(fmt.Sprintf("Unexpected status %s\n", fullChannelPath))
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)
 					cancel()
@@ -200,7 +213,7 @@ func main() {
 
 			if status != priority_channels.ReceiveSuccess &&
 				status != priority_channels.ReceiveChannelClosed &&
-				(status != priority_channels.ReceivePriorityChannelClosed || channel == "") {
+				(status != priority_channels.ReceivePriorityChannelClosed || fullChannelPath == "") {
 				_, err := f.WriteString("Exiting\n")
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)
@@ -277,6 +290,10 @@ func main() {
 		case "U", "NU":
 			triggerPauseChannels[4] <- value
 			fmt.Printf(operation + " receiving Urgent messages\n")
+		case "D":
+			presentDetails.Store(true)
+		case "ND":
+			presentDetails.Store(false)
 		case "0":
 			fmt.Printf("Exiting\n")
 			cancel()

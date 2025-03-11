@@ -41,22 +41,32 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 }
 
 func (pc *PriorityChannel[T]) Receive() (msg T, channelName string, ok bool) {
+	msg, receiveDetails, status := pc.ReceiveEx()
+	return msg, receiveDetails.ChannelName, status
+}
+
+func (pc *PriorityChannel[T]) ReceiveEx() (msg T, details ReceiveDetails, ok bool) {
 	if pc.lock != nil {
 		pc.lock.Lock()
 		defer pc.lock.Unlock()
 	}
-	msg, channelName, status := pc.receiveSingleMessage(context.Background(), false)
+	msg, details, status := pc.receiveSingleMessage(context.Background(), false)
 	if status != ReceiveSuccess {
-		return getZero[T](), channelName, false
+		return getZero[T](), details, false
 	}
-	return msg, channelName, true
+	return msg, details, true
 }
 
 func (pc *PriorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus) {
+	msg, receiveDetails, status := pc.ReceiveWithContextEx(ctx)
+	return msg, receiveDetails.ChannelName, status
+}
+
+func (pc *PriorityChannel[T]) ReceiveWithContextEx(ctx context.Context) (msg T, details ReceiveDetails, status ReceiveStatus) {
 	if pc.lock != nil {
 		gotLock := pc.lock.TryLockWithContext(ctx)
 		if !gotLock {
-			return getZero[T](), "", ReceiveContextCancelled
+			return getZero[T](), ReceiveDetails{}, ReceiveContextCancelled
 		}
 		defer pc.lock.Unlock()
 	}
@@ -64,10 +74,15 @@ func (pc *PriorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, ch
 }
 
 func (pc *PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus) {
+	msg, receiveDetails, status := pc.ReceiveWithDefaultCaseEx()
+	return msg, receiveDetails.ChannelName, status
+}
+
+func (pc *PriorityChannel[T]) ReceiveWithDefaultCaseEx() (msg T, details ReceiveDetails, status ReceiveStatus) {
 	if pc.lock != nil {
 		gotLock := psync.TryLockOrExitOnState(pc.lock, pc.blockWaitAllChannelsTracker)
 		if !gotLock {
-			return getZero[T](), "", ReceiveDefaultCase
+			return getZero[T](), ReceiveDetails{}, ReceiveDefaultCase
 		}
 		defer pc.lock.Unlock()
 	}
@@ -78,12 +93,12 @@ func (pc *PriorityChannel[T]) Close() {
 	pc.ctxCancel()
 }
 
-func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, channelName string, status ReceiveStatus) {
+func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, details ReceiveDetails, status ReceiveStatus) {
 	select {
 	case <-pc.ctx.Done():
-		return getZero[T](), "", ReceivePriorityChannelClosed
+		return getZero[T](), ReceiveDetails{}, ReceivePriorityChannelClosed
 	case <-ctx.Done():
-		return getZero[T](), "", ReceiveContextCancelled
+		return getZero[T](), ReceiveDetails{}, ReceiveContextCancelled
 	default:
 	}
 	msg, channelName, pathInTree, status := pc.doReceiveSingleMessage(ctx, withDefaultCase)
@@ -96,7 +111,41 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 			break
 		}
 	}
-	return msg, channelName, status
+	return msg, toReceiveDetails(channelName, pathInTree), status
+}
+
+func toReceiveDetails(channelName string, pathInTree []selectable.ChannelNode) ReceiveDetails {
+	if len(pathInTree) == 0 {
+		return ReceiveDetails{
+			ChannelName:  channelName,
+			ChannelIndex: 0,
+		}
+	}
+	res := ReceiveDetails{
+		ChannelName:  channelName,
+		ChannelIndex: pathInTree[0].ChannelIndex,
+	}
+	if len(pathInTree) > 1 {
+		res.PathInTree = make([]ChannelNode, 0, len(pathInTree)-1)
+		for i := len(pathInTree) - 2; i >= 0; i-- {
+			res.PathInTree = append(res.PathInTree, ChannelNode{
+				ChannelName:  pathInTree[i].ChannelName,
+				ChannelIndex: pathInTree[i+1].ChannelIndex,
+			})
+		}
+	}
+	return res
+}
+
+type ReceiveDetails struct {
+	ChannelName  string
+	ChannelIndex int
+	PathInTree   []ChannelNode
+}
+
+type ChannelNode struct {
+	ChannelName  string
+	ChannelIndex int
 }
 
 func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, channelName string, PathInTree []selectable.ChannelNode, status ReceiveStatus) {
