@@ -2,6 +2,7 @@ package priority_channels
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dmgrit/priority-channels/channels"
 	"github.com/dmgrit/priority-channels/internal/selectable"
@@ -9,10 +10,15 @@ import (
 	"github.com/dmgrit/priority-channels/strategies/priority_strategies"
 )
 
+var ErrInvalidFrequencyMethod = errors.New("invalid frequency method")
+
 func NewByFrequencyRatio[T any](ctx context.Context,
 	channelsWithFreqRatios []channels.ChannelWithFreqRatio[T],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
-	strategy, probabilityStrategy := getFrequencyStrategy(options...)
+	strategy, probabilityStrategy, err := getFrequencyStrategy(options...)
+	if err != nil {
+		return nil, err
+	}
 	if probabilityStrategy != nil {
 		probabilityChannels := toProbabilitySelectableChannels(channelsWithFreqRatios)
 		return newByStrategy(ctx, probabilityStrategy, probabilityChannels, options...)
@@ -26,7 +32,7 @@ func NewByFrequencyRatio[T any](ctx context.Context,
 	return newByStrategy(ctx, strategy, selectableChannels, options...)
 }
 
-func getFrequencyStrategy(options ...func(*PriorityChannelOptions)) (PrioritizationStrategy[int], PrioritizationStrategy[float64]) {
+func getFrequencyStrategy(options ...func(*PriorityChannelOptions)) (PrioritizationStrategy[int], PrioritizationStrategy[float64], error) {
 	pcOptions := &PriorityChannelOptions{}
 	for _, option := range options {
 		option(pcOptions)
@@ -38,15 +44,15 @@ func getFrequencyStrategy(options ...func(*PriorityChannelOptions)) (Prioritizat
 
 	switch {
 	case frequencyMethod == ProbabilisticByMultipleRandCalls:
-		return nil, priority_strategies.NewByProbability()
+		return nil, priority_strategies.NewByProbability(), nil
 	case frequencyMethod == ProbabilisticByCaseDuplication:
-		return frequency_strategies.NewProbabilisticByCaseDuplication(), nil
+		return frequency_strategies.NewProbabilisticByCaseDuplication(), nil, nil
 	case frequencyMethod == StrictOrderFully:
-		return frequency_strategies.NewWithStrictOrderFully(), nil
+		return frequency_strategies.NewWithStrictOrderFully(), nil, nil
 	case frequencyMethod == StrictOrderAcrossCycles:
-		return frequency_strategies.NewWithStrictOrderAcrossCycles(), nil
+		return frequency_strategies.NewWithStrictOrderAcrossCycles(), nil, nil
 	default:
-		return frequency_strategies.NewWithStrictOrderAcrossCycles(), nil
+		return nil, nil, ErrInvalidFrequencyMethod
 	}
 }
 

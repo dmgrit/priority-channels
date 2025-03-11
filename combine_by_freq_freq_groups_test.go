@@ -196,6 +196,32 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups(t *testing.T) {
 	}
 }
 
+func TestCombinePriorityChannelsByFreqRatio_ErrorOnInvalidFrequencyMethod(t *testing.T) {
+	ctx := context.Background()
+	customerAPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx,
+		"Customer A", make(chan string))
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+	customerBPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx,
+		"Customer B", make(chan string))
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	_, err = priority_channels.CombineByFrequencyRatio[string](ctx, []priority_channels.PriorityChannelWithFreqRatio[string]{
+		priority_channels.NewPriorityChannelWithFreqRatio("Customer A", customerAPriorityChannel, 5),
+		priority_channels.NewPriorityChannelWithFreqRatio("Customer B", customerBPriorityChannel, 1),
+	}, priority_channels.WithFrequencyMethod(22))
+
+	if err == nil {
+		t.Fatalf("Expected invalid frequency method error but got none")
+	}
+	if err.Error() != priority_channels.ErrInvalidFrequencyMethod.Error() {
+		t.Fatalf("Expected invalid frequency method but got %v", err)
+	}
+}
+
 func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 

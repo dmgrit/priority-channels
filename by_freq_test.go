@@ -114,6 +114,23 @@ func TestProcessMessagesByFrequencyRatio(t *testing.T) {
 	}
 }
 
+func TestErrorOnInvalidFrequencyMethod(t *testing.T) {
+	ctx := context.Background()
+	channelsWithFreqRatio := []channels.ChannelWithFreqRatio[string]{
+		channels.NewChannelWithFreqRatio("Channel A", make(chan string), 1),
+		channels.NewChannelWithFreqRatio("Channel B", make(chan string), 2),
+		channels.NewChannelWithFreqRatio("Channel C", make(chan string), 3),
+	}
+
+	_, err := pc.NewByFrequencyRatio(ctx, channelsWithFreqRatio, pc.WithFrequencyMethod(22))
+	if err == nil {
+		t.Fatalf("Expected invalid frequency method error but got none")
+	}
+	if err.Error() != pc.ErrInvalidFrequencyMethod.Error() {
+		t.Fatalf("Expected invalid frequency method but got %v", err)
+	}
+}
+
 func TestProcessMessagesByFrequencyRatio_TenThousandMessages(t *testing.T) {
 	var testCases = []struct {
 		Name            string
