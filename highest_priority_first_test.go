@@ -33,9 +33,13 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst(t *testing.T) {
 	}
 	msgsChannels[3] <- &Msg{Body: "Priority-1000 Msg-1"}
 
+	done := make(chan struct{})
 	var results []*Msg
 	msgProcessor := func(_ context.Context, msg *Msg, channelName string) {
 		results = append(results, msg)
+		if len(results) == 46 {
+			done <- struct{}{}
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -45,7 +49,7 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst(t *testing.T) {
 	}
 	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
 
-	time.Sleep(3 * time.Second)
+	<-done
 	cancel()
 
 	expectedResults := []*Msg{
