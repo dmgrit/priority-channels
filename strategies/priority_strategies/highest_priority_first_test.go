@@ -3,6 +3,8 @@ package priority_strategies
 import (
 	"reflect"
 	"testing"
+
+	"github.com/dmgrit/priority-channels/strategies"
 )
 
 func TestHighestPriorityFirst_ShrinkSamePriorityRanges(t *testing.T) {
@@ -170,5 +172,130 @@ func TestHighestPriorityFirst_ShrinkSamePriorityRanges(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHighestAlwaysFirst(t *testing.T) {
+	s := NewByHighestAlwaysFirst()
+	err := s.Initialize([]int{1, 2, 3, 3, 3, 4, 5})
+	if err != nil {
+		t.Fatalf("Unexpected error on initialization: %v", err)
+	}
+
+	nextIndexes, isLastIteration := s.NextSelectCasesRankedIndexes(1)
+	expectedNextIndexes := []strategies.RankedIndex{
+		{Index: 6, Rank: 1},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, false)
+
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(2)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, false)
+
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(3)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 2, Rank: 3}, {Index: 3, Rank: 3}, {Index: 4, Rank: 3},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, false)
+
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(6)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 2, Rank: 3}, {Index: 3, Rank: 3}, {Index: 4, Rank: 3},
+		{Index: 1, Rank: 4},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, false)
+
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(7)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 2, Rank: 3}, {Index: 3, Rank: 3}, {Index: 4, Rank: 3},
+		{Index: 1, Rank: 4}, {Index: 0, Rank: 5},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, true)
+
+	s.UpdateOnCaseSelected(6)
+	s.UpdateOnCaseSelected(0)
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(7)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 2, Rank: 3}, {Index: 3, Rank: 3}, {Index: 4, Rank: 3},
+		{Index: 1, Rank: 4}, {Index: 0, Rank: 5},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, true)
+
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(3)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 2, Rank: 3}, {Index: 3, Rank: 3}, {Index: 4, Rank: 3},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, false)
+
+	s.UpdateOnCaseSelected(2)
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(7)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 3, Rank: 3}, {Index: 4, Rank: 3}, {Index: 2, Rank: 4},
+		{Index: 1, Rank: 5}, {Index: 0, Rank: 6},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, true)
+
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(3)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 3, Rank: 3}, {Index: 4, Rank: 3},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, false)
+
+	s.UpdateOnCaseSelected(4)
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(7)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 3, Rank: 3}, {Index: 2, Rank: 4}, {Index: 4, Rank: 4},
+		{Index: 1, Rank: 5}, {Index: 0, Rank: 6},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, true)
+
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(3)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 3, Rank: 3},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, false)
+
+	s.DisableSelectCase(4)
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(6)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 6, Rank: 1}, {Index: 5, Rank: 2},
+		{Index: 3, Rank: 3}, {Index: 2, Rank: 4},
+		{Index: 1, Rank: 5}, {Index: 0, Rank: 6},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, true)
+
+	s.DisableSelectCase(6)
+	nextIndexes, isLastIteration = s.NextSelectCasesRankedIndexes(5)
+	expectedNextIndexes = []strategies.RankedIndex{
+		{Index: 5, Rank: 1},
+		{Index: 3, Rank: 2}, {Index: 2, Rank: 3},
+		{Index: 1, Rank: 4}, {Index: 0, Rank: 5},
+	}
+	assertNextIndexesAndLastIteration(t, nextIndexes, isLastIteration, expectedNextIndexes, true)
+}
+
+func assertNextIndexesAndLastIteration(t *testing.T,
+	nextIndexes []strategies.RankedIndex,
+	lastIteration bool,
+	expectedNextIndexes []strategies.RankedIndex,
+	expectedLastIteration bool) {
+	if !reflect.DeepEqual(nextIndexes, expectedNextIndexes) {
+		t.Fatalf("Expected to get indexes %v, but got %v", expectedNextIndexes, nextIndexes)
+	}
+	if lastIteration && !expectedLastIteration {
+		t.Fatalf("Expected not to be the last iteration")
+	} else if !lastIteration && expectedLastIteration {
+		t.Fatalf("Expected to be the last iteration")
 	}
 }

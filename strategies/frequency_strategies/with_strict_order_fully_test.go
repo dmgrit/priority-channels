@@ -14,7 +14,6 @@ func TestWithStrictOrderFully(t *testing.T) {
 		t.Fatalf("Unexpected error on initialization: %v", err)
 	}
 
-	// first iteration - all cases are in the zero level with zero value - all selected
 	nextIndexes, isLastIteration := s.NextSelectCasesRankedIndexes(1)
 	expectedNextIndexes := []strategies.RankedIndex{
 		{Index: 4, Rank: 1},
