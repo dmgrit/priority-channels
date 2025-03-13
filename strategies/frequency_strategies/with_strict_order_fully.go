@@ -16,7 +16,7 @@ type WithStrictOrder struct {
 	fully             bool
 }
 
-func NewWithStrictOrderAcrossCycles() *WithStrictOrder {
+func NewWithStrictOrderAcrossCycles2() *WithStrictOrder {
 	return newWithStrictOrder(false)
 }
 
@@ -104,7 +104,7 @@ func (s *WithStrictOrder) nextSelectCasesRankedIndexesWithoutStrictOrder(upto in
 			res = append(res, strategies.RankedIndex{Index: b.OrigChannelIndex, Rank: rank})
 		}
 		if len(res) >= upto {
-			return res, i == len(s.levels)-1 && j == len(level.Buckets)-1
+			return res, i == len(s.levels)-1 && j == len(level.Buckets)
 		}
 	}
 	return res, true
