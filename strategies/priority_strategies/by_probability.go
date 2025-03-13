@@ -82,24 +82,30 @@ func (s *ByProbability) InitializeWithTypeAssertion(probabilities []interface{})
 }
 
 func (s *ByProbability) NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool) {
-	if len(s.pendingProbabilities) > 0 {
-		i := 0
-		if len(s.pendingProbabilities) > 1 {
-			nextFlop := rand.Float64()
-			i = sort.Search(len(s.pendingProbabilities), func(i int) bool {
-				return nextFlop <= s.pendingProbabilities[i].AdjustedValue
-			})
+	if len(s.currSelectedIndexes) < upto && len(s.pendingProbabilities) > 0 {
+		remainingFlops := upto - len(s.currSelectedIndexes)
+		for i := 1; i <= remainingFlops && len(s.pendingProbabilities) > 0; i++ {
+			s.nextFlop()
 		}
-		s.currSelectedIndexes = append(s.currSelectedIndexes, s.pendingProbabilities[i].OriginalIndex)
-		s.pendingProbabilities = append(s.pendingProbabilities[:i], s.pendingProbabilities[i+1:]...)
-		s.readjustSortedProbabilitySelectionsList(s.pendingProbabilities)
 	}
-
 	res := make([]strategies.RankedIndex, 0, upto)
 	for i := 0; i < upto && i < len(s.currSelectedIndexes); i++ {
 		res = append(res, strategies.RankedIndex{Index: s.currSelectedIndexes[i], Rank: i + 1})
 	}
 	return res, len(s.pendingProbabilities) == 0 && len(res) == len(s.currSelectedIndexes)
+}
+
+func (s *ByProbability) nextFlop() {
+	i := 0
+	if len(s.pendingProbabilities) > 1 {
+		nextFlop := rand.Float64()
+		i = sort.Search(len(s.pendingProbabilities), func(i int) bool {
+			return nextFlop <= s.pendingProbabilities[i].AdjustedValue
+		})
+	}
+	s.currSelectedIndexes = append(s.currSelectedIndexes, s.pendingProbabilities[i].OriginalIndex)
+	s.pendingProbabilities = append(s.pendingProbabilities[:i], s.pendingProbabilities[i+1:]...)
+	s.readjustSortedProbabilitySelectionsList(s.pendingProbabilities)
 }
 
 func (s *ByProbability) UpdateOnCaseSelected(index int) {
