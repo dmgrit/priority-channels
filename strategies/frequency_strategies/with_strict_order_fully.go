@@ -98,13 +98,11 @@ func (s *WithStrictOrder) nextSelectCasesRankedIndexesWithoutStrictOrder(upto in
 	rank := 0
 	for i, level := range s.levels {
 		rank++
-		j := 0
 		for _, b := range level.Buckets {
-			j++
 			res = append(res, strategies.RankedIndex{Index: b.OrigChannelIndex, Rank: rank})
 		}
 		if len(res) >= upto {
-			return res, i == len(s.levels)-1 && j == len(level.Buckets)
+			return res, i == len(s.levels)-1
 		}
 	}
 	return res, true
