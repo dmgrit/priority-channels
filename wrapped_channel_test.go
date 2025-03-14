@@ -111,3 +111,36 @@ func TestWrappedChannelClosed(t *testing.T) {
 		t.Errorf("Expected empty priority channel name, but got %s", channelName)
 	}
 }
+
+func TestCombinedWrappedChannelClosed(t *testing.T) {
+	ctx := context.Background()
+	ctx2, cancel := context.WithCancel(context.Background())
+	wrappedChannel, err := priority_channels.WrapAsPriorityChannel(
+		ctx2, "channel-1", make(chan string))
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	cancel()
+
+	otherWrappedChannel, err := priority_channels.WrapAsPriorityChannel(ctx, "channel-2", make(chan string))
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	ch, err := priority_channels.CombineByHighestAlwaysFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
+		priority_channels.NewPriorityChannelWithPriority("wrapped-channel-1", wrappedChannel, 5),
+		priority_channels.NewPriorityChannelWithPriority("wrapped-channel-2", otherWrappedChannel, 1),
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	_, channelName, status := ch.ReceiveWithContext(context.Background())
+	if status != priority_channels.ReceivePriorityChannelClosed {
+		t.Errorf("Expected status ReceivePriorityChannelClosed (%v), but got %v",
+			priority_channels.ReceivePriorityChannelClosed, status)
+	}
+	if channelName != "wrapped-channel-1" {
+		t.Errorf("Expected empty priority channel name 'wrapped_channel-1', but got %s", channelName)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -358,6 +359,112 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessag
 			t.Errorf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
 				channelName, expectedRatio, actualRatio)
 		}
+	}
+}
+
+func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessages_Sanity(t *testing.T) {
+	var testCases = []struct {
+		Name            string
+		FreqRatioMethod priority_channels.FrequencyMethod
+	}{
+		{
+			Name:            "StrictOrderAcrossCycles",
+			FreqRatioMethod: priority_channels.StrictOrderAcrossCycles,
+		},
+		{
+			Name:            "StrictOrderFully",
+			FreqRatioMethod: priority_channels.StrictOrderFully,
+		},
+		{
+			Name:            "ProbabilisticWithCasesDuplications",
+			FreqRatioMethod: priority_channels.ProbabilisticByCaseDuplication,
+		},
+		{
+			Name:            "ProbabilisticByMultipleRandCalls",
+			FreqRatioMethod: priority_channels.ProbabilisticByMultipleRandCalls,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatioWithMethod(t, tc.FreqRatioMethod, 10000)
+		})
+	}
+}
+
+func testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatioWithMethod(t *testing.T, freqRatioMethod priority_channels.FrequencyMethod, messagesNum int) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var inputChannels []chan string
+	var priorityChannelsWithFreqRatio []priority_channels.PriorityChannelWithFreqRatio[string]
+
+	channelsNum := 5
+	for i := 1; i <= channelsNum; i++ {
+		inputChannel := make(chan string)
+		inputChannels = append(inputChannels, inputChannel)
+		ch, err := priority_channels.WrapAsPriorityChannel(ctx, fmt.Sprintf("channel-%d", i), inputChannel)
+		if err != nil {
+			t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+		}
+		priorityChannelsWithFreqRatio = append(priorityChannelsWithFreqRatio, priority_channels.NewPriorityChannelWithFreqRatio(
+			fmt.Sprintf("priority-channel-%d", i), ch, i))
+	}
+
+	freqTotalSum := 0.0
+	for i := 1; i <= channelsNum; i++ {
+		freqTotalSum += float64(priorityChannelsWithFreqRatio[i-1].FreqRatio())
+	}
+	expectedRatios := make(map[string]float64)
+	for _, ch := range priorityChannelsWithFreqRatio {
+		channelName := strings.TrimPrefix(ch.Name(), "priority-")
+		expectedRatios[channelName] = float64(ch.FreqRatio()) / freqTotalSum
+	}
+
+	for i := 1; i <= channelsNum; i++ {
+		go func(i int) {
+			for j := 1; j <= messagesNum; j++ {
+				select {
+				case <-ctx.Done():
+					return
+				case inputChannels[i-1] <- fmt.Sprintf("Channel %d", i):
+				}
+			}
+		}(i)
+	}
+
+	ch, err := priority_channels.CombineByFrequencyRatio(ctx, priorityChannelsWithFreqRatio, priority_channels.WithFrequencyMethod(freqRatioMethod))
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+	totalCount := 0
+	countPerChannel := make(map[string]int)
+	go func() {
+		for {
+			_, channel, ok := ch.Receive()
+			if !ok {
+				return
+			}
+			time.Sleep(1 * time.Microsecond)
+			totalCount++
+			countPerChannel[channel] = countPerChannel[channel] + 1
+			if totalCount == messagesNum {
+				cancel()
+				return
+			}
+		}
+	}()
+
+	<-ctx.Done()
+
+	for _, channel := range priorityChannelsWithFreqRatio {
+		channelName := strings.TrimPrefix(channel.Name(), "priority-")
+		expectedRatio := expectedRatios[channelName]
+		actualRatio := float64(countPerChannel[channelName]) / float64(totalCount)
+		if math.Abs(expectedRatio-actualRatio) > 0.03 {
+			t.Errorf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
+				channelName, expectedRatio, actualRatio)
+		}
+		t.Logf("Channel %s: expected messages number by ratio %.2f, got %.2f\n",
+			channelName, expectedRatio, actualRatio)
 	}
 }
 

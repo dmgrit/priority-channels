@@ -1,6 +1,7 @@
 package priority_strategies
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -297,5 +298,73 @@ func assertNextIndexesAndLastIteration(t *testing.T,
 		t.Fatalf("Expected not to be the last iteration")
 	} else if !lastIteration && expectedLastIteration {
 		t.Fatalf("Expected to be the last iteration")
+	}
+}
+
+func TestByHighestAlwaysFirst_Initialization(t *testing.T) {
+	testCases := []struct {
+		Name          string
+		Weights       []int
+		ExpectedError error
+	}{
+		{
+			Name:    "Negative priority",
+			Weights: []int{1, 2, 3, -4},
+			ExpectedError: &strategies.WeightValidationError{
+				ChannelIndex: 3,
+				Err:          ErrPriorityIsNegative,
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			strategy := NewByHighestAlwaysFirst()
+			err := strategy.Initialize(tc.Weights)
+			if err == nil {
+				t.Fatalf("Expected error on initialization")
+			}
+			if !reflect.DeepEqual(err, tc.ExpectedError) {
+				t.Fatalf("Expected error %v, but got %v", tc.ExpectedError, err)
+			}
+		})
+	}
+}
+
+func TestByHighestAlwaysFirst_InitializationWithTypeAssertion(t *testing.T) {
+	testCases := []struct {
+		Name          string
+		Weights       []interface{}
+		ExpectedError error
+	}{
+		{
+			Name:    "Negative priority",
+			Weights: []interface{}{1, 2, 3, -4},
+			ExpectedError: &strategies.WeightValidationError{
+				ChannelIndex: 3,
+				Err:          ErrPriorityIsNegative,
+			},
+		},
+		{
+			Name:    "Invalid type",
+			Weights: []interface{}{1, 2.2, 3, 4},
+			ExpectedError: &strategies.WeightValidationError{
+				ChannelIndex: 1,
+				Err:          fmt.Errorf("priority must be of type int"),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			strategy := NewByHighestAlwaysFirst()
+			err := strategy.InitializeWithTypeAssertion(tc.Weights)
+			if err == nil {
+				t.Fatalf("Expected error on initialization")
+			}
+			if !reflect.DeepEqual(err, tc.ExpectedError) {
+				t.Fatalf("Expected error %v, but got %v", tc.ExpectedError, err)
+			}
+		})
 	}
 }
