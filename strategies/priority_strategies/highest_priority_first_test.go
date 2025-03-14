@@ -64,6 +64,18 @@ func TestHighestPriorityFirst_ShrinkSamePriorityRanges(t *testing.T) {
 			},
 		},
 		{
+			name:       "one duplicate - priority zero should be legal",
+			priorities: []int{0, 1, 0, 2},
+			expectedSortedPriorities: []sortedToOriginalIndex{
+				{Priority: 2, OriginalIndex: 3},
+				{Priority: 1, OriginalIndex: 1},
+				{Priority: 0, OriginalIndex: -1, SamePriorityRange: &samePriorityRange{
+					indexToOrigIndex: map[int]int{0: 0, 1: 2},
+					origIndexToIndex: map[int]int{0: 0, 2: 1},
+				}},
+			},
+		},
+		{
 			name:       "multiple duplicates - sorted ascending",
 			priorities: []int{1, 1, 2, 2, 2, 3, 4, 4, 4, 4, 5, 6, 6},
 			expectedSortedPriorities: []sortedToOriginalIndex{
