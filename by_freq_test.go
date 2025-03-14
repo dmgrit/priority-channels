@@ -235,6 +235,127 @@ func testProcessMessagesByFrequencyRatioWithMethod(t *testing.T, freqRatioMethod
 	}
 }
 
+func TestProcessMessagesByFrequencyRatio_RandomChannelsList(t *testing.T) {
+	t.Skip()
+	var testCases = []struct {
+		Name            string
+		FreqRatioMethod pc.FrequencyMethod
+	}{
+		{
+			Name:            "StrictOrderAcrossCycles",
+			FreqRatioMethod: pc.StrictOrderAcrossCycles,
+		},
+		{
+			Name:            "StrictOrderFully",
+			FreqRatioMethod: pc.StrictOrderFully,
+		},
+		{
+			Name:            "ProbabilisticWithCasesDuplications",
+			FreqRatioMethod: pc.ProbabilisticByCaseDuplication,
+		},
+		{
+			Name:            "ProbabilisticByMultipleRandCalls",
+			FreqRatioMethod: pc.ProbabilisticByMultipleRandCalls,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			testProcessMessagesByFrequencyRatio_RandomChannelsListWithMethod(t, tc.FreqRatioMethod)
+		})
+	}
+}
+
+func testProcessMessagesByFrequencyRatio_RandomChannelsListWithMethod(t *testing.T, frequencyMethod pc.FrequencyMethod) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	childrenNum := rand.N(9) + 2
+	totalSum := 0.0
+	weights := make([]int, 0, childrenNum)
+	for i := 0; i < childrenNum; i++ {
+		w := rand.N(10) + 1
+		weights = append(weights, w)
+		totalSum += float64(w)
+	}
+	expectedRatios := make([]float64, 0, childrenNum)
+	accExpectedRatio := 0.0
+	for i := 0; i < childrenNum; i++ {
+		if i == childrenNum-1 {
+			expectedRatios = append(expectedRatios, 1.0-accExpectedRatio)
+			break
+		}
+		expectedRatio := float64(weights[i]) / totalSum
+		expectedRatios = append(expectedRatios, expectedRatio)
+		accExpectedRatio += expectedRatio
+	}
+	channelsWithExpectedRatios := make(map[string]channelWithExpectedRatio)
+	channelsWithFreqRatio := make([]channels.ChannelWithFreqRatio[string], 0, childrenNum)
+	for i := 0; i < childrenNum; i++ {
+		cwr := channelWithExpectedRatio{
+			channel:       make(chan string, 10),
+			expectedRatio: expectedRatios[i],
+		}
+		channelName := fmt.Sprintf("channel-%d", i)
+		channelsWithExpectedRatios[channelName] = cwr
+		childChannel := channels.NewChannelWithFreqRatio(channelName, cwr.channel, weights[i])
+		channelsWithFreqRatio = append(channelsWithFreqRatio, childChannel)
+	}
+
+	ch, err := pc.NewByFrequencyRatio[string](ctx, channelsWithFreqRatio, pc.WithFrequencyMethod(frequencyMethod))
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
+
+	messagesNum := 100000
+	for channelName, cwr := range channelsWithExpectedRatios {
+		go func(channelName string, cwr channelWithExpectedRatio) {
+			for j := 1; j <= messagesNum; j++ {
+				select {
+				case <-ctx.Done():
+					return
+				case cwr.channel <- fmt.Sprintf("Message %d", j):
+				}
+			}
+		}(channelName, cwr)
+	}
+
+	totalCount := 0
+	countPerChannel := make(map[string]int)
+	go func() {
+		for {
+			_, channel, ok := ch.Receive()
+			if !ok {
+				return
+			}
+			time.Sleep(1 * time.Microsecond)
+			totalCount++
+			countPerChannel[channel] = countPerChannel[channel] + 1
+			if totalCount == messagesNum {
+				cancel()
+				return
+			}
+		}
+	}()
+
+	<-ctx.Done()
+
+	totalDiff := 0.0
+	for channelName, cwr := range channelsWithExpectedRatios {
+		actualRatio := float64(countPerChannel[channelName]) / float64(totalCount)
+		diff := math.Abs(cwr.expectedRatio - actualRatio)
+		diffPercentage := (diff / cwr.expectedRatio) * 100
+		if diffPercentage > 3 && frequencyMethod != pc.ProbabilisticByCaseDuplication {
+			t.Errorf("Unexpected Ratio: Channel %s: expected messages number by ratio %.5f, got %.5f (%.1f%%)",
+				channelName, cwr.expectedRatio, actualRatio, diffPercentage)
+		} else {
+			t.Logf("Channel %s: expected messages number by ratio %.5f, got %.5f (%.1f%%)",
+				channelName, cwr.expectedRatio, actualRatio, diffPercentage)
+		}
+		totalDiff += diff
+	}
+	t.Logf("Total diff: %.5f\n", totalDiff)
+}
+
 func TestProcessMessagesByFrequencyRatio_TenThousandMessages2(t *testing.T) {
 	t.Skip()
 	var testCases = []struct {
