@@ -499,7 +499,7 @@ func TestProcessMessagesOfCombinedPriorityChannelsByFrequencyRatio_RandomTree(t 
 		},
 	}
 
-	freqRatioTree := generateRandomFreqRatioTree(t)
+	freqRatioTree := generateRandomFreqRatioTree(t, 3, 5, 5)
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 			testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatio_RandomTree(t,
@@ -643,16 +643,16 @@ func doGeneratePriorityChannelTreeFromFreqRatioTree(t *testing.T, ctx context.Co
 	return ch
 }
 
-func generateRandomFreqRatioTree(t *testing.T) *freqRatioTreeNode {
+func generateRandomFreqRatioTree(t *testing.T, maxLevelNum int, maxChildrenNum int, maxWeight int) *freqRatioTreeNode {
 	// from 1 to 5 levels
-	levelsNum := rand.N(3) + 2
+	levelsNum := rand.N(maxLevelNum) + 1
 	//levelsNum := 1
 	// from 2 to 5 children per node
-	childrenNum := rand.N(4) + 2
+	childrenNum := rand.N(maxChildrenNum) + 1
 	totalSum := 0.0
 	weights := make([]int, 0, childrenNum)
 	for i := 0; i < childrenNum; i++ {
-		w := rand.N(10) + 1
+		w := rand.N(maxWeight) + 1
 		weights = append(weights, w)
 		totalSum += float64(w)
 	}
@@ -671,7 +671,7 @@ func generateRandomFreqRatioTree(t *testing.T) *freqRatioTreeNode {
 	children := make([]*freqRatioTreeNode, 0, childrenNum)
 	for i := 0; i < childrenNum; i++ {
 		childLabel := fmt.Sprintf("%d", i)
-		childNode := generateRandomFreqRatioSubtree(levelsNum-1, childLabel, weights[i], expectedRatios[i])
+		childNode := generateRandomFreqRatioSubtree(levelsNum-1, childLabel, weights[i], expectedRatios[i], maxChildrenNum, maxWeight)
 		children = append(children, childNode)
 	}
 	return &freqRatioTreeNode{
@@ -682,9 +682,10 @@ func generateRandomFreqRatioTree(t *testing.T) *freqRatioTreeNode {
 	}
 }
 
-func generateRandomFreqRatioSubtree(currLevel int, currLabel string, weight int, currExpectedRatio float64) *freqRatioTreeNode {
+func generateRandomFreqRatioSubtree(currLevel int, currLabel string, weight int, currExpectedRatio float64,
+	maxChildrenNum int, maxWeight int) *freqRatioTreeNode {
 	// from 1 to 5 children per node
-	childrenNum := rand.N(5) + 1
+	childrenNum := rand.N(maxChildrenNum) + 1
 	if childrenNum == 1 {
 		return generateRandomFreqRatioTreeLeafNode(currLevel,
 			fmt.Sprintf("%s-%d", currLabel, 0), weight, currExpectedRatio)
@@ -693,7 +694,7 @@ func generateRandomFreqRatioSubtree(currLevel int, currLabel string, weight int,
 	totalSum := 0.0
 	weights := make([]int, 0, childrenNum)
 	for i := 0; i < childrenNum; i++ {
-		w := rand.N(10) + 1
+		w := rand.N(maxWeight) + 1
 		weights = append(weights, w)
 		totalSum += float64(w)
 	}
@@ -717,7 +718,7 @@ func generateRandomFreqRatioSubtree(currLevel int, currLabel string, weight int,
 		if currLevel == 1 {
 			childNode = generateRandomFreqRatioTreeLeafNode(currLevel-1, childLabel, weights[i], expectedRatio)
 		} else {
-			childNode = generateRandomFreqRatioSubtree(currLevel-1, childLabel, weights[i], expectedRatio)
+			childNode = generateRandomFreqRatioSubtree(currLevel-1, childLabel, weights[i], expectedRatio, maxChildrenNum, maxWeight)
 		}
 		children = append(children, childNode)
 	}

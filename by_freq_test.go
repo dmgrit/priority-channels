@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -259,17 +260,16 @@ func TestProcessMessagesByFrequencyRatio_RandomChannelsList(t *testing.T) {
 		},
 	}
 
+	channelsWithFreqRatio, channelsWithExpectedRatios := generateRandomFreqRatioList(8, 16)
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			testProcessMessagesByFrequencyRatio_RandomChannelsListWithMethod(t, tc.FreqRatioMethod)
+			testProcessMessagesByFrequencyRatio_RandomChannelsListWithMethod(t, channelsWithFreqRatio, channelsWithExpectedRatios, tc.FreqRatioMethod)
 		})
 	}
 }
 
-func testProcessMessagesByFrequencyRatio_RandomChannelsListWithMethod(t *testing.T, frequencyMethod pc.FrequencyMethod) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	childrenNum := rand.N(9) + 2
+func generateRandomFreqRatioList(minListSize, maxListSize int) ([]channels.ChannelWithFreqRatio[string], map[string]channelWithExpectedRatio) {
+	childrenNum := rand.N(maxListSize-minListSize+1) + minListSize
 	totalSum := 0.0
 	weights := make([]int, 0, childrenNum)
 	for i := 0; i < childrenNum; i++ {
@@ -300,7 +300,14 @@ func testProcessMessagesByFrequencyRatio_RandomChannelsListWithMethod(t *testing
 		childChannel := channels.NewChannelWithFreqRatio(channelName, cwr.channel, weights[i])
 		channelsWithFreqRatio = append(channelsWithFreqRatio, childChannel)
 	}
+	return channelsWithFreqRatio, channelsWithExpectedRatios
+}
 
+func testProcessMessagesByFrequencyRatio_RandomChannelsListWithMethod(t *testing.T,
+	channelsWithFreqRatio []channels.ChannelWithFreqRatio[string],
+	channelsWithExpectedRatios map[string]channelWithExpectedRatio,
+	frequencyMethod pc.FrequencyMethod) {
+	ctx, cancel := context.WithCancel(context.Background())
 	ch, err := pc.NewByFrequencyRatio[string](ctx, channelsWithFreqRatio, pc.WithFrequencyMethod(frequencyMethod))
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
@@ -340,7 +347,14 @@ func testProcessMessagesByFrequencyRatio_RandomChannelsListWithMethod(t *testing
 	<-ctx.Done()
 
 	totalDiff := 0.0
-	for channelName, cwr := range channelsWithExpectedRatios {
+	channelNames := make([]string, 0, len(channelsWithExpectedRatios))
+	for channelName := range channelsWithExpectedRatios {
+		channelNames = append(channelNames, channelName)
+	}
+	sort.Strings(channelNames)
+
+	for _, channelName := range channelNames {
+		cwr := channelsWithExpectedRatios[channelName]
 		actualRatio := float64(countPerChannel[channelName]) / float64(totalCount)
 		diff := math.Abs(cwr.expectedRatio - actualRatio)
 		diffPercentage := (diff / cwr.expectedRatio) * 100
