@@ -644,10 +644,7 @@ func doGeneratePriorityChannelTreeFromFreqRatioTree(t *testing.T, ctx context.Co
 }
 
 func generateRandomFreqRatioTree(t *testing.T, maxLevelNum int, maxChildrenNum int, maxWeight int) *freqRatioTreeNode {
-	// from 1 to 5 levels
-	levelsNum := rand.N(maxLevelNum) + 1
-	//levelsNum := 1
-	// from 2 to 5 children per node
+	levelsNum := rand.N(maxLevelNum) + 2
 	childrenNum := rand.N(maxChildrenNum) + 1
 	totalSum := 0.0
 	weights := make([]int, 0, childrenNum)
