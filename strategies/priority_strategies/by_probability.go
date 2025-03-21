@@ -57,7 +57,9 @@ func (s *ByProbability) Initialize(probabilities []float64) error {
 	}
 
 	sort.Slice(s.pendingProbabilities, func(i, j int) bool {
-		return s.pendingProbabilities[i].Probability > s.pendingProbabilities[j].Probability
+		return s.pendingProbabilities[i].Probability > s.pendingProbabilities[j].Probability ||
+			(s.pendingProbabilities[i].Probability == s.pendingProbabilities[j].Probability &&
+				s.pendingProbabilities[i].OriginalIndex > s.pendingProbabilities[j].OriginalIndex)
 	})
 	currSum := 0.0
 	for i, p := range s.pendingProbabilities {

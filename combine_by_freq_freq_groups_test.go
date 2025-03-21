@@ -473,18 +473,18 @@ func testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatioWithMethod(t *
 type channelWithExpectedRatio struct {
 	channel       chan string
 	expectedRatio float64
+	channelIndex  int
 }
 
 func TestProcessMessagesOfCombinedPriorityChannelsByFrequencyRatio_RandomTree(t *testing.T) {
-	t.Skip()
 	var testCases = []struct {
 		Name            string
 		FrequencyMethod priority_channels.FrequencyMethod
 	}{
-		{
-			Name:            "StrictOrderAcrossCycles",
-			FrequencyMethod: priority_channels.StrictOrderAcrossCycles,
-		},
+		//{
+		//	Name:            "StrictOrderAcrossCycles",
+		//	FrequencyMethod: priority_channels.StrictOrderAcrossCycles,
+		//},
 		{
 			Name:            "StrictOrderFully",
 			FrequencyMethod: priority_channels.StrictOrderFully,
@@ -500,25 +500,124 @@ func TestProcessMessagesOfCombinedPriorityChannelsByFrequencyRatio_RandomTree(t 
 	}
 
 	freqRatioTree := generateRandomFreqRatioTree(t, 3, 5, 5)
+
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 			testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatio_RandomTree(t,
 				freqRatioTree,
-				tc.FrequencyMethod)
+				nil,
+				tc.FrequencyMethod,
+				nil,
+				false)
 		})
 	}
 }
 
+func TestProcessMessagesOfCombinedPriorityChannelsByFrequencyRatio_RandomTreeSubset(t *testing.T) {
+	var testCases = []struct {
+		Name            string
+		FrequencyMethod priority_channels.FrequencyMethod
+		CloseChannels   bool
+	}{
+		//{
+		//	Name:            "StrictOrderAcrossCycles",
+		//	FrequencyMethod: priority_channels.StrictOrderAcrossCycles,
+		//},
+		{
+			Name:            "StrictOrderFully",
+			FrequencyMethod: priority_channels.StrictOrderFully,
+		},
+		{
+			Name:            "StrictOrderFully-CloseChannels",
+			FrequencyMethod: priority_channels.StrictOrderFully,
+			CloseChannels:   true,
+		},
+		//{
+		//	Name:            "ProbabilisticWithCasesDuplications",
+		//	FrequencyMethod: priority_channels.ProbabilisticByCaseDuplication,
+		//},
+		{
+			Name:            "ProbabilisticByMultipleRandCalls",
+			FrequencyMethod: priority_channels.ProbabilisticByMultipleRandCalls,
+		},
+		{
+			Name:            "ProbabilisticByMultipleRandCalls-CloseChannels",
+			FrequencyMethod: priority_channels.ProbabilisticByMultipleRandCalls,
+			CloseChannels:   true,
+		},
+	}
+
+	freqRatioTree := generateRandomFreqRatioTree(t, 3, 5, 5)
+
+	channelIndexesSubset := getRandomChannelIndexesSubset(freqRatioTree.totalChannelsNum())
+	var recomputedChannelsFreqRatios map[int]float64
+	if channelIndexesSubset != nil {
+		truncatedTree, _ := duplicateFreqRatioTreeExceptNotIncludedChannelIndexes(freqRatioTree, channelIndexesSubset)
+		recomputedChannelsFreqRatios = make(map[int]float64)
+		recomputeFreqRatioTreeExpectedRatios(truncatedTree, channelIndexesSubset, recomputedChannelsFreqRatios)
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatio_RandomTree(t,
+				freqRatioTree,
+				recomputedChannelsFreqRatios,
+				tc.FrequencyMethod,
+				channelIndexesSubset,
+				tc.CloseChannels)
+		})
+	}
+}
+
+func getRandomChannelIndexesSubset(channelsNum int) map[int]struct{} {
+	allChannelIndexes := make([]int, 0, channelsNum)
+	for i := 0; i < channelsNum; i++ {
+		allChannelIndexes = append(allChannelIndexes, i)
+	}
+	rand.Shuffle(channelsNum, func(i, j int) {
+		allChannelIndexes[i], allChannelIndexes[j] = allChannelIndexes[j], allChannelIndexes[i]
+	})
+	subsetSize := rand.IntN(channelsNum) + 1
+	if subsetSize == 1 {
+		subsetSize = 2
+	}
+	channelIndexesSubset := make(map[int]struct{})
+	for _, i := range allChannelIndexes[:subsetSize] {
+		channelIndexesSubset[i] = struct{}{}
+	}
+	return channelIndexesSubset
+}
+
 func testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatio_RandomTree(t *testing.T,
 	freqRatioTree *freqRatioTreeNode,
-	frequencyMethod priority_channels.FrequencyMethod) {
+	recomputedChannelsFrequencyRatios map[int]float64,
+	frequencyMethod priority_channels.FrequencyMethod,
+	channelIndexesSubset map[int]struct{},
+	closeChannels bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	ch, channelsWithExpectedRatios := generatePriorityChannelTreeFromFreqRatioTree(t, ctx, freqRatioTree, frequencyMethod)
+	if recomputedChannelsFrequencyRatios != nil {
+		for _, c := range channelsWithExpectedRatios {
+			c.expectedRatio = recomputedChannelsFrequencyRatios[c.channelIndex]
+		}
+	}
+
+	if len(channelIndexesSubset) > 0 {
+		t.Logf("Taking subset of %d channels out of %d\n", len(channelIndexesSubset), len(channelsWithExpectedRatios))
+		for channelName, cwr := range channelsWithExpectedRatios {
+			if _, ok := channelIndexesSubset[cwr.channelIndex]; !ok {
+				delete(channelsWithExpectedRatios, channelName)
+				if closeChannels {
+					close(cwr.channel)
+				}
+			}
+		}
+	}
 
 	messagesNum := 100000
 	for channelName, cwr := range channelsWithExpectedRatios {
-		go func(channelName string, cwr channelWithExpectedRatio) {
+		go func(channelName string, cwr *channelWithExpectedRatio) {
 			for j := 1; j <= messagesNum; j++ {
 				select {
 				case <-ctx.Done():
@@ -561,7 +660,16 @@ func testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatio_RandomTree(t 
 		actualRatio := float64(countPerChannel[channelName]) / float64(totalCount)
 		diff := math.Abs(cwr.expectedRatio - actualRatio)
 		diffPercentage := (diff / cwr.expectedRatio) * 100
-		if diffPercentage > 3 && frequencyMethod != priority_channels.ProbabilisticByCaseDuplication {
+		var diffThreshold float64
+		switch frequencyMethod {
+		case priority_channels.StrictOrderAcrossCycles, priority_channels.StrictOrderFully:
+			diffThreshold = 3
+		case priority_channels.ProbabilisticByCaseDuplication:
+			diffThreshold = 8
+		case priority_channels.ProbabilisticByMultipleRandCalls:
+			diffThreshold = 5
+		}
+		if diffPercentage > diffThreshold && diff > 0.001 {
 			t.Errorf("Unexpected Ratio: Channel %s: expected messages number by ratio %.5f, got %.5f (%.1f%%)",
 				channelName, cwr.expectedRatio, actualRatio, diffPercentage)
 		} else {
@@ -579,12 +687,15 @@ type freqRatioTreeNode struct {
 	Children      []*freqRatioTreeNode
 	Weight        int
 	ExpectedRatio float64
+	ChannelIndex  int
 }
 
 func generatePriorityChannelTreeFromFreqRatioTree(t *testing.T, ctx context.Context, root *freqRatioTreeNode, frequencyMethod priority_channels.FrequencyMethod) (
-	*priority_channels.PriorityChannel[string], map[string]channelWithExpectedRatio) {
-	channelsWithExpectedRatios := make(map[string]channelWithExpectedRatio)
+	*priority_channels.PriorityChannel[string], map[string]*channelWithExpectedRatio) {
+	channelsWithExpectedRatios := make(map[string]*channelWithExpectedRatio)
+	startTime := time.Now()
 	ch := doGeneratePriorityChannelTreeFromFreqRatioTree(t, ctx, root, frequencyMethod, channelsWithExpectedRatios)
+	t.Logf("Time to generate priority channel tree: %v\n", time.Since(startTime))
 	sumOfAllChannels := 0.0
 	for _, cwr := range channelsWithExpectedRatios {
 		sumOfAllChannels += cwr.expectedRatio
@@ -598,26 +709,31 @@ func generatePriorityChannelTreeFromFreqRatioTree(t *testing.T, ctx context.Cont
 func doGeneratePriorityChannelTreeFromFreqRatioTree(t *testing.T, ctx context.Context,
 	node *freqRatioTreeNode,
 	frequencyMethod priority_channels.FrequencyMethod,
-	channelsWithExpectedRatios map[string]channelWithExpectedRatio) *priority_channels.PriorityChannel[string] {
+	channelsWithExpectedRatios map[string]*channelWithExpectedRatio) *priority_channels.PriorityChannel[string] {
 	if len(node.Children) == 0 {
-		cwr := channelWithExpectedRatio{
+		cwr := &channelWithExpectedRatio{
 			channel:       make(chan string, 10),
 			expectedRatio: node.ExpectedRatio,
+			channelIndex:  node.ChannelIndex,
 		}
 		channelName := fmt.Sprintf("channel-%d-%s", node.Level, node.Label)
 		if _, ok := channelsWithExpectedRatios[channelName]; ok {
 			t.Fatalf("Duplicate channel name: %s", channelName)
 		}
 		channelsWithExpectedRatios[channelName] = cwr
-		ch, _ := priority_channels.WrapAsPriorityChannel(ctx, channelName, cwr.channel)
+		ch, err := priority_channels.WrapAsPriorityChannel(ctx, channelName, cwr.channel, priority_channels.AutoDisableClosedChannels())
+		if err != nil {
+			t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+		}
 		return ch
 	}
 	if node.Level == 1 {
 		channelsWithFreqRatio := make([]channels.ChannelWithFreqRatio[string], 0, len(node.Children))
 		for _, child := range node.Children {
-			cwr := channelWithExpectedRatio{
+			cwr := &channelWithExpectedRatio{
 				channel:       make(chan string, 10),
 				expectedRatio: child.ExpectedRatio,
+				channelIndex:  child.ChannelIndex,
 			}
 			childName := fmt.Sprintf("channel-%d-%s", child.Level, child.Label)
 			if _, ok := channelsWithExpectedRatios[childName]; ok {
@@ -627,7 +743,10 @@ func doGeneratePriorityChannelTreeFromFreqRatioTree(t *testing.T, ctx context.Co
 			childChannel := channels.NewChannelWithFreqRatio(childName, cwr.channel, child.Weight)
 			channelsWithFreqRatio = append(channelsWithFreqRatio, childChannel)
 		}
-		ch, _ := priority_channels.NewByFrequencyRatio(ctx, channelsWithFreqRatio, priority_channels.WithFrequencyMethod(frequencyMethod))
+		ch, err := priority_channels.NewByFrequencyRatio(ctx, channelsWithFreqRatio, priority_channels.WithFrequencyMethod(frequencyMethod), priority_channels.AutoDisableClosedChannels())
+		if err != nil {
+			t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+		}
 		return ch
 	}
 	priorityChannelsWithFreqRatio := make([]priority_channels.PriorityChannelWithFreqRatio[string], 0, len(node.Children))
@@ -639,13 +758,24 @@ func doGeneratePriorityChannelTreeFromFreqRatioTree(t *testing.T, ctx context.Co
 			child.Weight)
 		priorityChannelsWithFreqRatio = append(priorityChannelsWithFreqRatio, childChannel)
 	}
-	ch, _ := priority_channels.CombineByFrequencyRatio[string](ctx, priorityChannelsWithFreqRatio, priority_channels.WithFrequencyMethod(frequencyMethod))
+	ch, err := priority_channels.CombineByFrequencyRatio[string](ctx, priorityChannelsWithFreqRatio,
+		priority_channels.WithFrequencyMethod(frequencyMethod),
+		priority_channels.AutoDisableClosedChannels())
+	if err != nil {
+		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	}
 	return ch
 }
 
 func generateRandomFreqRatioTree(t *testing.T, maxLevelNum int, maxChildrenNum int, maxWeight int) *freqRatioTreeNode {
-	levelsNum := rand.N(maxLevelNum) + 2
+	levelsNum := rand.N(maxLevelNum) + 1
+	if levelsNum == 1 {
+		levelsNum = 2
+	}
 	childrenNum := rand.N(maxChildrenNum) + 1
+	if childrenNum == 1 {
+		childrenNum = 2
+	}
 	totalSum := 0.0
 	weights := make([]int, 0, childrenNum)
 	for i := 0; i < childrenNum; i++ {
@@ -666,9 +796,10 @@ func generateRandomFreqRatioTree(t *testing.T, maxLevelNum int, maxChildrenNum i
 	}
 
 	children := make([]*freqRatioTreeNode, 0, childrenNum)
+	currChannelIndex := 0
 	for i := 0; i < childrenNum; i++ {
 		childLabel := fmt.Sprintf("%d", i)
-		childNode := generateRandomFreqRatioSubtree(levelsNum-1, childLabel, weights[i], expectedRatios[i], maxChildrenNum, maxWeight)
+		childNode := generateRandomFreqRatioSubtree(levelsNum-1, childLabel, weights[i], expectedRatios[i], maxChildrenNum, maxWeight, &currChannelIndex)
 		children = append(children, childNode)
 	}
 	return &freqRatioTreeNode{
@@ -680,12 +811,11 @@ func generateRandomFreqRatioTree(t *testing.T, maxLevelNum int, maxChildrenNum i
 }
 
 func generateRandomFreqRatioSubtree(currLevel int, currLabel string, weight int, currExpectedRatio float64,
-	maxChildrenNum int, maxWeight int) *freqRatioTreeNode {
-	// from 1 to 5 children per node
+	maxChildrenNum int, maxWeight int, currChannelIndex *int) *freqRatioTreeNode {
 	childrenNum := rand.N(maxChildrenNum) + 1
 	if childrenNum == 1 {
 		return generateRandomFreqRatioTreeLeafNode(currLevel,
-			fmt.Sprintf("%s-%d", currLabel, 0), weight, currExpectedRatio)
+			fmt.Sprintf("%s-%d", currLabel, 0), weight, currExpectedRatio, currChannelIndex)
 	}
 
 	totalSum := 0.0
@@ -713,9 +843,9 @@ func generateRandomFreqRatioSubtree(currLevel int, currLabel string, weight int,
 		childLabel := fmt.Sprintf("%s-%d", currLabel, i)
 		expectedRatio := currExpectedRatio * expectedRatios[i]
 		if currLevel == 1 {
-			childNode = generateRandomFreqRatioTreeLeafNode(currLevel-1, childLabel, weights[i], expectedRatio)
+			childNode = generateRandomFreqRatioTreeLeafNode(currLevel-1, childLabel, weights[i], expectedRatio, currChannelIndex)
 		} else {
-			childNode = generateRandomFreqRatioSubtree(currLevel-1, childLabel, weights[i], expectedRatio, maxChildrenNum, maxWeight)
+			childNode = generateRandomFreqRatioSubtree(currLevel-1, childLabel, weights[i], expectedRatio, maxChildrenNum, maxWeight, currChannelIndex)
 		}
 		children = append(children, childNode)
 	}
@@ -728,13 +858,82 @@ func generateRandomFreqRatioSubtree(currLevel int, currLabel string, weight int,
 	}
 }
 
-func generateRandomFreqRatioTreeLeafNode(currLevel int, currLabel string, weight int, currExpectedRatio float64) *freqRatioTreeNode {
+func generateRandomFreqRatioTreeLeafNode(currLevel int, currLabel string, weight int, currExpectedRatio float64, channelIndex *int) *freqRatioTreeNode {
+	currChannelIndex := *channelIndex
+	*channelIndex = *channelIndex + 1
 	return &freqRatioTreeNode{
 		Level:         currLevel,
 		Label:         currLabel,
 		Weight:        weight,
 		ExpectedRatio: currExpectedRatio,
+		ChannelIndex:  currChannelIndex,
 	}
+}
+
+func recomputeFreqRatioTreeExpectedRatios(node *freqRatioTreeNode, channelIndexesSubset map[int]struct{}, recomputedExpectedFreqRatios map[int]float64) {
+	node.ExpectedRatio = 1.0
+	doRecomputeFreqRatioTreeExpectedRatios(node, channelIndexesSubset, recomputedExpectedFreqRatios)
+}
+
+func doRecomputeFreqRatioTreeExpectedRatios(node *freqRatioTreeNode, channelIndexesSubset map[int]struct{}, recomputedExpectedFreqRatios map[int]float64) {
+	totalSum := 0.0
+	for _, c := range node.Children {
+		isLeafNode := len(c.Children) == 0
+		_, channelIndexIncluded := channelIndexesSubset[c.ChannelIndex]
+		if isLeafNode && !channelIndexIncluded {
+			continue
+		}
+		totalSum += float64(c.Weight)
+	}
+	for _, c := range node.Children {
+		isLeafNode := len(c.Children) == 0
+		_, channelIndexIncluded := channelIndexesSubset[c.ChannelIndex]
+		if isLeafNode && !channelIndexIncluded {
+			recomputedExpectedFreqRatios[c.ChannelIndex] = c.ExpectedRatio
+			c.ExpectedRatio = 0
+			continue
+		}
+		c.ExpectedRatio = (float64(c.Weight) / totalSum) * node.ExpectedRatio
+		if isLeafNode {
+			recomputedExpectedFreqRatios[c.ChannelIndex] = c.ExpectedRatio
+		}
+		doRecomputeFreqRatioTreeExpectedRatios(c, channelIndexesSubset, recomputedExpectedFreqRatios)
+	}
+}
+
+func duplicateFreqRatioTreeExceptNotIncludedChannelIndexes(node *freqRatioTreeNode, channelIndexesSubset map[int]struct{}) (*freqRatioTreeNode, bool) {
+	newNode := &freqRatioTreeNode{
+		Level:        node.Level,
+		Label:        node.Label,
+		Weight:       node.Weight,
+		ChannelIndex: node.ChannelIndex,
+	}
+	if len(node.Children) == 0 {
+		return newNode, true
+	}
+	for _, c := range node.Children {
+		isLeafNode := len(c.Children) == 0
+		_, channelIndexIncluded := channelIndexesSubset[c.ChannelIndex]
+		if isLeafNode && !channelIndexIncluded {
+			continue
+		}
+		newChild, nonEmptySubtree := duplicateFreqRatioTreeExceptNotIncludedChannelIndexes(c, channelIndexesSubset)
+		if nonEmptySubtree {
+			newNode.Children = append(newNode.Children, newChild)
+		}
+	}
+	return newNode, len(newNode.Children) > 0
+}
+
+func (n *freqRatioTreeNode) totalChannelsNum() int {
+	if len(n.Children) == 0 {
+		return 1
+	}
+	total := 0
+	for _, c := range n.Children {
+		total += c.totalChannelsNum()
+	}
+	return total
 }
 
 func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_AutoDisableClosedChannels(t *testing.T) {
