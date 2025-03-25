@@ -18,7 +18,7 @@ type UnsupportedFrequencyMethodForCombineError struct {
 }
 
 func (e *UnsupportedFrequencyMethodForCombineError) Error() string {
-	return fmt.Sprintf("frequency method %v does not support combination of priority channels", frequencyMethodNames[e.FrequencyMethod])
+	return fmt.Sprintf("frequency method %v does not support combining priority channels", frequencyMethodNames[e.FrequencyMethod])
 }
 
 const (
