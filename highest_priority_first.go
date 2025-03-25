@@ -21,12 +21,12 @@ func NewByHighestAlwaysFirst[T any](ctx context.Context,
 			channels.NewChannelWithWeight[T, int](c.ChannelName(), c.MsgsC(), c.Priority()),
 		))
 	}
-	_, err := getFrequencyStrategy(LevelNew, pcOptions.frequencyMode, pcOptions.frequencyMethod, len(selectableChannels))
+	_, err := getFrequencyStrategy(levelNew, pcOptions.frequencyMode, pcOptions.frequencyMethod, len(selectableChannels))
 	if err != nil {
 		return nil, err
 	}
 	strategy := priority_strategies.NewByHighestAlwaysFirst(priority_strategies.WithFrequencyStrategyGenerator(func(numChannels int) priority_strategies.FrequencyStrategy {
-		frequencyStrategy, _ := getFrequencyStrategy(LevelNew, pcOptions.frequencyMode, pcOptions.frequencyMethod, numChannels)
+		frequencyStrategy, _ := getFrequencyStrategy(levelNew, pcOptions.frequencyMode, pcOptions.frequencyMethod, numChannels)
 		return frequencyStrategy
 	}))
 	return newByStrategy(ctx, strategy, selectableChannels, options...)

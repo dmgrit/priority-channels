@@ -22,7 +22,7 @@ func (e *UnsupportedFrequencyMethodForCombineError) Error() string {
 }
 
 const (
-	maxChannelsForProbabilisticByCaseDuplication = 200
+	maxRecommendedChannelsForCaseDuplication = 200
 )
 
 type FrequencyMethod int
@@ -53,14 +53,14 @@ var frequencyModeNames = map[FrequencyMode]string{
 	ProbabilisticMode: "ProbabilisticMode",
 }
 
-type Level int
+type frequencyStrategyLevel int
 
 const (
-	LevelNew Level = iota
-	LevelCombine
+	levelNew frequencyStrategyLevel = iota
+	levelCombine
 )
 
-func getFrequencyStrategy(level Level, mode *FrequencyMode, method *FrequencyMethod, numChannels int) (PrioritizationStrategy[int], error) {
+func getFrequencyStrategy(level frequencyStrategyLevel, mode *FrequencyMode, method *FrequencyMethod, numChannels int) (PrioritizationStrategy[int], error) {
 	frequencyMode := ProbabilisticMode
 	if mode != nil {
 		frequencyMode = *mode
@@ -71,18 +71,18 @@ func getFrequencyStrategy(level Level, mode *FrequencyMode, method *FrequencyMet
 
 	var frequencyMethod FrequencyMethod
 	switch {
-	case level == LevelNew && frequencyMode == ProbabilisticMode:
-		if numChannels <= maxChannelsForProbabilisticByCaseDuplication {
+	case level == levelNew && frequencyMode == ProbabilisticMode:
+		if numChannels <= maxRecommendedChannelsForCaseDuplication {
 			frequencyMethod = ProbabilisticByCaseDuplication
 		} else {
 			frequencyMethod = ProbabilisticByMultipleRandCalls
 		}
-	case level == LevelNew && frequencyMode == StrictOrderMode:
+	case level == levelNew && frequencyMode == StrictOrderMode:
 		frequencyMethod = StrictOrderAcrossCycles
-	case level == LevelCombine && frequencyMode == ProbabilisticMode:
+	case level == levelCombine && frequencyMode == ProbabilisticMode:
 		frequencyMethod = ProbabilisticByMultipleRandCalls
 	default:
-		// level == LevelCombine && frequencyMode == StrictOrderMode:
+		// level == levelCombine && frequencyMode == StrictOrderMode:
 		frequencyMethod = StrictOrderFully
 	}
 
@@ -95,14 +95,14 @@ func getFrequencyStrategy(level Level, mode *FrequencyMode, method *FrequencyMet
 	case ProbabilisticByMultipleRandCalls:
 		return priority_strategies.NewByProbabilityFromFreqRatios(), nil
 	case ProbabilisticByCaseDuplication:
-		if level == LevelCombine {
+		if level == levelCombine {
 			return nil, &UnsupportedFrequencyMethodForCombineError{FrequencyMethod: frequencyMethod}
 		}
 		return frequency_strategies.NewProbabilisticByCaseDuplication(), nil
 	case StrictOrderFully:
 		return frequency_strategies.NewWithStrictOrderFully(), nil
 	case StrictOrderAcrossCycles:
-		if level == LevelCombine {
+		if level == levelCombine {
 			return nil, &UnsupportedFrequencyMethodForCombineError{FrequencyMethod: frequencyMethod}
 		}
 		return frequency_strategies.NewWithStrictOrderAcrossCycles(), nil

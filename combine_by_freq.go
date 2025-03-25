@@ -18,7 +18,7 @@ func CombineByFrequencyRatio[T any](ctx context.Context,
 	for _, c := range priorityChannelsWithFreqRatio {
 		sumFreqRatios += c.FreqRatio()
 	}
-	strategy, err := getFrequencyStrategy(LevelCombine, pcOptions.frequencyMode, pcOptions.frequencyMethod, sumFreqRatios)
+	strategy, err := getFrequencyStrategy(levelCombine, pcOptions.frequencyMode, pcOptions.frequencyMethod, sumFreqRatios)
 	if err != nil {
 		return nil, err
 	}

@@ -15,12 +15,12 @@ func CombineByHighestAlwaysFirst[T any](ctx context.Context,
 		option(pcOptions)
 	}
 	channels := toSelectableChannelsWithWeightByPriority[T](priorityChannelsWithPriority)
-	_, err := getFrequencyStrategy(LevelCombine, pcOptions.frequencyMode, pcOptions.frequencyMethod, len(channels))
+	_, err := getFrequencyStrategy(levelCombine, pcOptions.frequencyMode, pcOptions.frequencyMethod, len(channels))
 	if err != nil {
 		return nil, err
 	}
 	strategy := priority_strategies.NewByHighestAlwaysFirst(priority_strategies.WithFrequencyStrategyGenerator(func(numChannels int) priority_strategies.FrequencyStrategy {
-		frequencyStrategy, _ := getFrequencyStrategy(LevelCombine, pcOptions.frequencyMode, pcOptions.frequencyMethod, numChannels)
+		frequencyStrategy, _ := getFrequencyStrategy(levelCombine, pcOptions.frequencyMode, pcOptions.frequencyMethod, numChannels)
 		return frequencyStrategy
 	}))
 	return newByStrategy(ctx, strategy, channels, options...)

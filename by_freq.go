@@ -17,7 +17,7 @@ func NewByFrequencyRatio[T any](ctx context.Context,
 	for _, c := range channelsWithFreqRatios {
 		sumFreqRatios += c.FreqRatio()
 	}
-	strategy, err := getFrequencyStrategy(LevelNew, pcOptions.frequencyMode, pcOptions.frequencyMethod, sumFreqRatios)
+	strategy, err := getFrequencyStrategy(levelNew, pcOptions.frequencyMode, pcOptions.frequencyMethod, sumFreqRatios)
 	if err != nil {
 		return nil, err
 	}
