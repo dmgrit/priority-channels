@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dmgrit/priority-channels/strategies"
+	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
 
 func TestHighestPriorityFirst_ShrinkSamePriorityRanges(t *testing.T) {
@@ -189,7 +190,7 @@ func TestHighestPriorityFirst_ShrinkSamePriorityRanges(t *testing.T) {
 }
 
 func TestHighestAlwaysFirst(t *testing.T) {
-	s := NewByHighestAlwaysFirst()
+	s := NewByHighestAlwaysFirst(WithFrequencyStrategyGenerator(func(int) FrequencyStrategy { return frequency_strategies.NewWithStrictOrderAcrossCycles() }))
 	err := s.Initialize([]int{1, 2, 3, 3, 3, 4, 5})
 	if err != nil {
 		t.Fatalf("Unexpected error on initialization: %v", err)

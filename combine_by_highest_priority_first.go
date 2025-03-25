@@ -10,8 +10,19 @@ import (
 func CombineByHighestAlwaysFirst[T any](ctx context.Context,
 	priorityChannelsWithPriority []PriorityChannelWithPriority[T],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
+	pcOptions := &PriorityChannelOptions{}
+	for _, option := range options {
+		option(pcOptions)
+	}
 	channels := toSelectableChannelsWithWeightByPriority[T](priorityChannelsWithPriority)
-	strategy := priority_strategies.NewByHighestAlwaysFirst()
+	_, err := getFrequencyStrategy(LevelCombine, pcOptions.frequencyMode, pcOptions.frequencyMethod, len(channels))
+	if err != nil {
+		return nil, err
+	}
+	strategy := priority_strategies.NewByHighestAlwaysFirst(priority_strategies.WithFrequencyStrategyGenerator(func(numChannels int) priority_strategies.FrequencyStrategy {
+		frequencyStrategy, _ := getFrequencyStrategy(LevelCombine, pcOptions.frequencyMode, pcOptions.frequencyMethod, numChannels)
+		return frequencyStrategy
+	}))
 	return newByStrategy(ctx, strategy, channels, options...)
 }
 

@@ -39,18 +39,10 @@ const (
 	UnknownExitReason
 )
 
-type FrequencyMethod int
-
-const (
-	StrictOrderAcrossCycles FrequencyMethod = iota
-	StrictOrderFully
-	ProbabilisticByCaseDuplication
-	ProbabilisticByMultipleRandCalls
-)
-
 type PriorityChannelOptions struct {
 	channelReceiveWaitInterval *time.Duration
 	autoDisableClosedChannels  bool
+	frequencyMode              *FrequencyMode
 	frequencyMethod            *FrequencyMethod
 	isSynchronized             *bool
 }
@@ -72,6 +64,12 @@ func AutoDisableClosedChannels() func(opt *PriorityChannelOptions) {
 func WithFrequencyMethod(method FrequencyMethod) func(opt *PriorityChannelOptions) {
 	return func(opt *PriorityChannelOptions) {
 		opt.frequencyMethod = &method
+	}
+}
+
+func WithFrequencyMode(mode FrequencyMode) func(opt *PriorityChannelOptions) {
+	return func(opt *PriorityChannelOptions) {
+		opt.frequencyMode = &mode
 	}
 }
 

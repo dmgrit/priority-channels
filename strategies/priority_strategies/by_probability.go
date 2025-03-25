@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/dmgrit/priority-channels/strategies"
+	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
 
 var (
@@ -157,4 +158,48 @@ func (s *ByProbability) readjustSortedProbabilitySelectionsList(list []probabili
 	}
 	// Adjust last value to 1.0 to avoid floating point errors
 	list[len(list)-1].AdjustedValue = 1.0
+}
+
+type ByProbabilityFromFreqRatios struct {
+	*ByProbability
+}
+
+func NewByProbabilityFromFreqRatios() *ByProbabilityFromFreqRatios {
+	return &ByProbabilityFromFreqRatios{
+		ByProbability: NewByProbability(),
+	}
+}
+
+func (s *ByProbabilityFromFreqRatios) Initialize(freqRatios []int) error {
+	probabilitiesFloat64 := make([]float64, 0, len(freqRatios))
+	totalSum := 0.0
+	for i, freqRatio := range freqRatios {
+		if freqRatio <= 0 {
+			return &strategies.WeightValidationError{
+				ChannelIndex: i,
+				Err:          frequency_strategies.ErrFreqRatioMustBeGreaterThanZero,
+			}
+		}
+		totalSum += float64(freqRatio)
+	}
+	accSum := 0.0
+	for i, freqRatio := range freqRatios {
+		var prob float64
+		if i != len(freqRatios)-1 {
+			prob = float64(freqRatio) / totalSum
+			accSum = accSum + prob
+		} else {
+			prob = 1 - accSum
+		}
+		probabilitiesFloat64 = append(probabilitiesFloat64, prob)
+	}
+	return s.ByProbability.Initialize(probabilitiesFloat64)
+}
+
+func (s *ByProbability) ByProbabilityFromFreqRatios(freqRatios []interface{}) error {
+	freqRatiosInt, err := strategies.ConvertWeightsWithTypeAssertion[float64]("frequency ratio", freqRatios)
+	if err != nil {
+		return err
+	}
+	return s.Initialize(freqRatiosInt)
 }

@@ -368,10 +368,14 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessag
 	var testCases = []struct {
 		Name            string
 		FreqRatioMethod priority_channels.FrequencyMethod
+		ExpectedError   error
 	}{
 		{
 			Name:            "StrictOrderAcrossCycles",
 			FreqRatioMethod: priority_channels.StrictOrderAcrossCycles,
+			ExpectedError: &priority_channels.UnsupportedFrequencyMethodForCombineError{
+				FrequencyMethod: priority_channels.StrictOrderAcrossCycles,
+			},
 		},
 		{
 			Name:            "StrictOrderFully",
@@ -380,6 +384,9 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessag
 		{
 			Name:            "ProbabilisticWithCasesDuplications",
 			FreqRatioMethod: priority_channels.ProbabilisticByCaseDuplication,
+			ExpectedError: &priority_channels.UnsupportedFrequencyMethodForCombineError{
+				FrequencyMethod: priority_channels.ProbabilisticByCaseDuplication,
+			},
 		},
 		{
 			Name:            "ProbabilisticByMultipleRandCalls",
@@ -389,13 +396,15 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_TenThousandMessag
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatioWithMethod(t, tc.FreqRatioMethod, 10000)
+			testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatioWithMethod(t, tc.FreqRatioMethod, tc.ExpectedError, 10000)
 		})
 	}
 }
 
-func testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatioWithMethod(t *testing.T, freqRatioMethod priority_channels.FrequencyMethod, messagesNum int) {
+func testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatioWithMethod(t *testing.T, freqRatioMethod priority_channels.FrequencyMethod, expectedError error, messagesNum int) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var inputChannels []chan string
 	var priorityChannelsWithFreqRatio []priority_channels.PriorityChannelWithFreqRatio[string]
 
@@ -434,8 +443,13 @@ func testProcessMessagesOfCombinedPriorityChannelsByFrequencyRatioWithMethod(t *
 	}
 
 	ch, err := priority_channels.CombineByFrequencyRatio(ctx, priorityChannelsWithFreqRatio, priority_channels.WithFrequencyMethod(freqRatioMethod))
-	if err != nil {
+	if expectedError == nil && err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
+	} else if expectedError != nil && (err == nil || err.Error() != expectedError.Error()) {
+		t.Fatalf("Expected error %v, but got %v", expectedError, err)
+	}
+	if err != nil {
+		return
 	}
 	totalCount := 0
 	countPerChannel := make(map[string]int)

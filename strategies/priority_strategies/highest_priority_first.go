@@ -5,16 +5,16 @@ import (
 	"sort"
 
 	"github.com/dmgrit/priority-channels/strategies"
-	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
 
 var ErrPriorityIsNegative = errors.New("priority cannot be negative")
 
 type HighestAlwaysFirst struct {
-	origPriorities        []int
-	sortedPriorities      []sortedToOriginalIndex
-	totalSortedPriorities int
-	disabledCases         map[int]int
+	origPriorities             []int
+	sortedPriorities           []sortedToOriginalIndex
+	totalSortedPriorities      int
+	disabledCases              map[int]int
+	frequencyStrategyGenerator FrequencyStrategyGenerator
 }
 
 type sortedToOriginalIndex struct {
@@ -24,13 +24,13 @@ type sortedToOriginalIndex struct {
 }
 
 type samePriorityRange struct {
-	FrequencyStrategy frequencyStrategy
+	FrequencyStrategy FrequencyStrategy
 	indexToOrigIndex  map[int]int
 	origIndexToIndex  map[int]int
 	disabledCases     map[int]struct{}
 }
 
-func newSamePriorityRange(origIndexes []int, strategy frequencyStrategy) (*samePriorityRange, error) {
+func newSamePriorityRange(origIndexes []int, strategy FrequencyStrategy) (*samePriorityRange, error) {
 	res := &samePriorityRange{
 		FrequencyStrategy: strategy,
 		indexToOrigIndex:  make(map[int]int),
@@ -51,9 +51,13 @@ func newSamePriorityRange(origIndexes []int, strategy frequencyStrategy) (*sameP
 }
 
 func (sp *samePriorityRange) NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool) {
-	res, allSelected := sp.FrequencyStrategy.NextSelectCasesRankedIndexes(upto)
-	for i := range res {
-		res[i].Index = sp.indexToOrigIndex[res[i].Index]
+	rankedIndexes, allSelected := sp.FrequencyStrategy.NextSelectCasesRankedIndexes(upto)
+	res := make([]strategies.RankedIndex, 0, len(rankedIndexes))
+	for _, ri := range rankedIndexes {
+		res = append(res, strategies.RankedIndex{
+			Index: sp.indexToOrigIndex[ri.Index],
+			Rank:  ri.Rank,
+		})
 	}
 	return res, allSelected
 }
@@ -86,16 +90,40 @@ func (sp *samePriorityRange) Len() int {
 	return len(sp.indexToOrigIndex)
 }
 
-type frequencyStrategy interface {
+type FrequencyStrategy interface {
 	Initialize(weights []int) error
 	NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool)
 	UpdateOnCaseSelected(index int)
 	DisableSelectCase(index int)
 }
 
-func NewByHighestAlwaysFirst() *HighestAlwaysFirst {
+func NewByHighestAlwaysFirst(options ...func(opt *HighestAlwaysFirstOptions)) *HighestAlwaysFirst {
+	pcOptions := &HighestAlwaysFirstOptions{}
+	for _, option := range options {
+		option(pcOptions)
+	}
+	var frequencyStrategyGenerator FrequencyStrategyGenerator
+	if pcOptions.frequencyStrategyGenerator != nil {
+		frequencyStrategyGenerator = *pcOptions.frequencyStrategyGenerator
+	} else {
+		frequencyStrategyGenerator = func(int) FrequencyStrategy {
+			return NewByProbabilityFromFreqRatios()
+		}
+	}
 	return &HighestAlwaysFirst{
-		disabledCases: make(map[int]int),
+		disabledCases:              make(map[int]int),
+		frequencyStrategyGenerator: frequencyStrategyGenerator,
+	}
+}
+
+type FrequencyStrategyGenerator func(freqRatiosNum int) FrequencyStrategy
+type HighestAlwaysFirstOptions struct {
+	frequencyStrategyGenerator *FrequencyStrategyGenerator
+}
+
+func WithFrequencyStrategyGenerator(frequencyStrategyGenerator FrequencyStrategyGenerator) func(opt *HighestAlwaysFirstOptions) {
+	return func(opt *HighestAlwaysFirstOptions) {
+		opt.frequencyStrategyGenerator = &frequencyStrategyGenerator
 	}
 }
 
@@ -141,7 +169,7 @@ func (s *HighestAlwaysFirst) shrinkSamePrioritiesRanges() error {
 		for j := i; j <= finishIndex; j++ {
 			origIndexes = append(origIndexes, s.sortedPriorities[j].OriginalIndex)
 		}
-		spr, err := newSamePriorityRange(origIndexes, frequency_strategies.NewWithStrictOrderAcrossCycles())
+		spr, err := newSamePriorityRange(origIndexes, s.frequencyStrategyGenerator(len(origIndexes)))
 		if err != nil {
 			return err
 		}
