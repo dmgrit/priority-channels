@@ -23,6 +23,7 @@ func (e *UnsupportedFrequencyMethodForCombineError) Error() string {
 
 const (
 	maxRecommendedChannelsForCaseDuplication = 200
+	maxSupportedChannelsForCaseDuplication   = 65536
 )
 
 type FrequencyMethod int
@@ -97,6 +98,10 @@ func getFrequencyStrategy(level frequencyStrategyLevel, mode *FrequencyMode, met
 	case ProbabilisticByCaseDuplication:
 		if level == levelCombine {
 			return nil, &UnsupportedFrequencyMethodForCombineError{FrequencyMethod: frequencyMethod}
+		}
+		if numChannels > maxSupportedChannelsForCaseDuplication {
+			return nil, fmt.Errorf("too many channels %d for frequency method %s (max %d)",
+				numChannels, frequencyMethodNames[frequencyMethod], maxSupportedChannelsForCaseDuplication)
 		}
 		return frequency_strategies.NewProbabilisticByCaseDuplication(), nil
 	case StrictOrderFully:
