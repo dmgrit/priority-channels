@@ -23,7 +23,8 @@ func (e *UnsupportedFrequencyMethodForCombineError) Error() string {
 
 const (
 	maxRecommendedChannelsForCaseDuplication = 200
-	maxSupportedChannelsForCaseDuplication   = 65536
+	// 65536 is maximum supported number of channels in select statement, and 3 channels are reserved for internal use
+	maxSupportedChannelsForCaseDuplication = 65533
 )
 
 type FrequencyMethod int
