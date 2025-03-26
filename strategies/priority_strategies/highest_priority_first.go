@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/dmgrit/priority-channels/strategies"
+	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
 
 var ErrPriorityIsNegative = errors.New("priority cannot be negative")
@@ -107,7 +108,7 @@ func NewByHighestAlwaysFirst(options ...func(opt *HighestAlwaysFirstOptions)) *H
 		frequencyStrategyGenerator = *pcOptions.frequencyStrategyGenerator
 	} else {
 		frequencyStrategyGenerator = func(int) FrequencyStrategy {
-			return NewByProbabilityFromFreqRatios()
+			return frequency_strategies.NewByProbabilityFromFreqRatios()
 		}
 	}
 	return &HighestAlwaysFirst{

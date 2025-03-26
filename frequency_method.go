@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
-	"github.com/dmgrit/priority-channels/strategies/priority_strategies"
 )
 
 var (
@@ -95,7 +94,7 @@ func getFrequencyStrategy(level frequencyStrategyLevel, mode *FrequencyMode, met
 
 	switch frequencyMethod {
 	case ProbabilisticByMultipleRandCalls:
-		return priority_strategies.NewByProbabilityFromFreqRatios(), nil
+		return frequency_strategies.NewByProbabilityFromFreqRatios(), nil
 	case ProbabilisticByCaseDuplication:
 		if level == levelCombine {
 			return nil, &UnsupportedFrequencyMethodForCombineError{FrequencyMethod: frequencyMethod}

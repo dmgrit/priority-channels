@@ -1,4 +1,4 @@
-package priority_strategies
+package frequency_strategies
 
 import (
 	"errors"
@@ -6,7 +6,6 @@ import (
 	"sort"
 
 	"github.com/dmgrit/priority-channels/strategies"
-	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
 
 var (
@@ -177,7 +176,7 @@ func (s *ByProbabilityFromFreqRatios) Initialize(freqRatios []int) error {
 		if freqRatio <= 0 {
 			return &strategies.WeightValidationError{
 				ChannelIndex: i,
-				Err:          frequency_strategies.ErrFreqRatioMustBeGreaterThanZero,
+				Err:          ErrFreqRatioMustBeGreaterThanZero,
 			}
 		}
 		totalSum += float64(freqRatio)

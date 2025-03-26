@@ -232,7 +232,7 @@ func TestProcessMessagesByDynamicStrategy_TypeAssertion(t *testing.T) {
 		},
 		{
 			Name:                 "ByProbability",
-			Strategy:             priority_strategies.NewByProbability(),
+			Strategy:             frequency_strategies.NewByProbability(),
 			InvalidWeight:        1,
 			ExpectedErrorMessage: "channel 'Channel 1': probability must be of type float64",
 		},

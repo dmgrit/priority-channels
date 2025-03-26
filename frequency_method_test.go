@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
-	"github.com/dmgrit/priority-channels/strategies/priority_strategies"
 )
 
 func TestGetFrequencyStrategy(t *testing.T) {
@@ -53,13 +52,13 @@ func TestGetFrequencyStrategy(t *testing.T) {
 			level:            levelNew,
 			numChannels:      10,
 			method:           &probabilisticByMultipleRandCalls,
-			expectedStrategy: priority_strategies.NewByProbabilityFromFreqRatios(),
+			expectedStrategy: frequency_strategies.NewByProbabilityFromFreqRatios(),
 		},
 		{
 			name:             "NewLevel - If number of channels is greater than recommended - strategy is By Probability",
 			level:            levelNew,
 			numChannels:      maxRecommendedChannelsForCaseDuplication + 1,
-			expectedStrategy: priority_strategies.NewByProbabilityFromFreqRatios(),
+			expectedStrategy: frequency_strategies.NewByProbabilityFromFreqRatios(),
 		},
 		{
 			name:             "NewLevel - Strategy provided but number of channels is greater than recommended - still use provided Strategy",
@@ -94,14 +93,14 @@ func TestGetFrequencyStrategy(t *testing.T) {
 			name:             "CombineLevel - Default strategy is By Probability",
 			level:            levelCombine,
 			numChannels:      10,
-			expectedStrategy: priority_strategies.NewByProbabilityFromFreqRatios(),
+			expectedStrategy: frequency_strategies.NewByProbabilityFromFreqRatios(),
 		},
 		{
 			name:             "CombineLevel - Strategy for probabilistic mode is By Probability",
 			level:            levelCombine,
 			mode:             &probabilisticMode,
 			numChannels:      10,
-			expectedStrategy: priority_strategies.NewByProbabilityFromFreqRatios(),
+			expectedStrategy: frequency_strategies.NewByProbabilityFromFreqRatios(),
 		},
 		{
 			name:          "CombineLevel - Case Duplication method is not supported",
