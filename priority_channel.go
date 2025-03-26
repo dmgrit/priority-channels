@@ -26,7 +26,7 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 	ctx, cancel := context.WithCancel(ctx)
 	var l *psync.Lock
 	var blockWaitAllChannelsTracker *psync.RepeatingStateTracker
-	if pcOptions.isSynchronized != nil && *pcOptions.isSynchronized {
+	if pcOptions.isSynchronized == nil || *pcOptions.isSynchronized {
 		l = psync.NewLock()
 		blockWaitAllChannelsTracker = psync.NewRepeatingStateTracker()
 	}
