@@ -1,5 +1,5 @@
 # priority-channels
-Process Go channels by priority. 
+Process Go channels by priority 
 
 
 The following use cases are supported:
@@ -13,31 +13,35 @@ The following use cases are supported:
 - Channel groups by frequency ratio inside group and choose among groups by highest priority first
 - Channel groups by frequency ratio inside group and choose among groups by frequency ratio
 - Channel groups by highest priority first inside group and choose among groups also by highest priority first
-- Graph of priority channels - any combinations of the above to multiple levels of hierarchy
+- Tree of priority channels - any combinations of the above to multiple levels of hierarchy
 
 
 ## Usage
 
 ### Priority channel with highest priority always first
 
+In the example below, messages in the high-priority channel are processed first.  
+If the high-priority channel is empty, messages from the normal-priority channel are processed.  
+The low-priority channel is processed only when both the high and normal-priority channels are empty.    
+
 ```go
-urgentC := make(chan string) 
-normalC := make(chan string) 
+highPriorityC := make(chan string) 
+normalPriorityC := make(chan string) 
 lowPriorityC := make(chan string)
 
 // Wrap the Go channels in a slice of channels objects with name and priority properties
 channelsWithPriority := []channels.ChannelWithPriority[string]{
     channels.NewChannelWithPriority(
-        "Urgent Messages", 
-        urgentC, 
+        "High Priority", 
+        highPriorityC, 
         10),
     channels.NewChannelWithPriority(
-        "Normal Messages", 
-        normalC, 
+        "Normal Priority", 
+        normalPriorityC, 
         5),
     channels.NewChannelWithPriority(
-        "Low Priority Messages", 
-        lowPriorityC,
+        "Low Priority", 
+        lowPriorityC, 
         1),
 }
 
@@ -57,6 +61,8 @@ for {
 
 ### Priority channel with frequency ratio
 
+In the example below, messages with high, normal, and low priorities will be processed in a ratio of 10:5:1 respectively.
+
 ```go
 highPriorityC := make(chan string)
 normalPriorityC := make(chan string)
@@ -66,15 +72,15 @@ lowPriorityC := make(chan string)
 channelsWithFrequencyRatio := []channels.ChannelWithFreqRatio[string]{
     channels.NewChannelWithFreqRatio(
         "High Priority", 
-        highPriorityC,
+        highPriorityC, 
         10),
     channels.NewChannelWithFreqRatio(
-        "Normal Priority",
-        normalPriorityC,
+        "Normal Priority", 
+        normalPriorityC, 
         5),
     channels.NewChannelWithFreqRatio(
         "Low Priority", 
-        lowPriorityC,
+        lowPriorityC, 
         1),
 }
 
@@ -92,7 +98,13 @@ for {
 }
 ```
 
-### Combination of priority channels by highest priority first
+### Combination of priority channels to multiple levels of hierarchy
+
+In this example, we have a tree of priority channels:
+- Urgent messages are always processed first.
+- Two groups of channels: paying customers and free users.
+- Paying customers are processed 5 times for every 1 time free users are processed.
+- Within each group, high priority messages are processed 3 times for every 1 time low priority messages are processed.
 
 ```go
 urgentMessagesC := make(chan string)
@@ -101,7 +113,7 @@ payingCustomerLowPriorityC := make(chan string)
 freeUserHighPriorityC := make(chan string)
 freeUserLowPriorityC := make(chan string)
 
-urgentMessagesPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx, 
+urgentMessagesPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx,
     "Urgent Messages", urgentMessagesC)
 if err != nil {
     // handle error
@@ -111,7 +123,7 @@ payingCustomerPriorityChannel, err := priority_channels.NewByFrequencyRatio(ctx,
     channels.NewChannelWithFreqRatio(
         "Paying Customer - High Priority",
         payingCustomerHighPriorityC,
-        5),
+        3),
     channels.NewChannelWithFreqRatio(
         "Paying Customer - Low Priority",
         payingCustomerLowPriorityC,
@@ -125,7 +137,7 @@ freeUserPriorityChannel, err := priority_channels.NewByFrequencyRatio(ctx, []cha
     channels.NewChannelWithFreqRatio(
         "Free User - High Priority",
         freeUserHighPriorityC,
-        5),
+        3),
     channels.NewChannelWithFreqRatio(
         "Free User - Low Priority",
         freeUserLowPriorityC,
@@ -135,237 +147,28 @@ if err != nil {
     // handle error
 }
 
-priorityChannelsWithPriority := []priority_channels.PriorityChannelWithPriority[string]{
-    priority_channels.NewPriorityChannelWithPriority(
-        "Urgent Messages", 
-        urgentMessagesPriorityChannel,
-        100,
-    ),
-    priority_channels.NewPriorityChannelWithPriority(
-        "Paying Customer",
-        payingCustomerPriorityChannel,
-        10),
-    priority_channels.NewPriorityChannelWithPriority(
-        "Free User",
-        freeUserPriorityChannel,
-        1),
-}
-
-ch, err := priority_channels.CombineByHighestAlwaysFirst(ctx, priorityChannelsWithPriority)
-if err != nil {
-    // handle error
-}
-
-for {
-    message, channelName, ok := ch.Receive()
-    if !ok {
-        break
-    }
-    fmt.Printf("%s: %s\n", channelName, message)
-}
-```
-
-### Combination of priority channels by frequency ratio
-
-```go
-urgentMessagesC := make(chan string)
-payingCustomerHighPriorityC := make(chan string)
-payingCustomerLowPriorityC := make(chan string)
-freeUserHighPriorityC := make(chan string)
-freeUserLowPriorityC := make(chan string)
-
-urgentMessagesPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx, 
-    "Urgent Messages", urgentMessagesC)
-if err != nil {
-    // handle error
-}
-
-payingCustomerPriorityChannel, err := priority_channels.NewByHighestAlwaysFirst(ctx, []channels.ChannelWithPriority[string]{
-    channels.NewChannelWithPriority(
-        "Paying Customer - High Priority",
-        payingCustomerHighPriorityC,
-        5),
-    channels.NewChannelWithPriority(
-        "Paying Customer - Low Priority",
-        payingCustomerLowPriorityC,
-        1),
-})
-if err != nil {
-    // handle error
-}
-
-freeUserPriorityChannel, err := priority_channels.NewByHighestAlwaysFirst(ctx, []channels.ChannelWithPriority[string]{
-    channels.NewChannelWithPriority(
-        "Free User - High Priority",
-        freeUserHighPriorityC,
-        5),
-    channels.NewChannelWithPriority(
-        "Free User - Low Priority",
-        freeUserLowPriorityC,
-        1),
-})
-if err != nil {
-    // handle error
-}
-
-priorityChannelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
-    priority_channels.NewPriorityChannelWithFreqRatio(
-        "Urgent Messages", 
-        urgentMessagesPriorityChannel,
-        100,
-    ),
+combinedUsersPriorityChannel, err := priority_channels.CombineByFrequencyRatio(ctx, []priority_channels.PriorityChannelWithFreqRatio[string]{
     priority_channels.NewPriorityChannelWithFreqRatio(
         "Paying Customer",
         payingCustomerPriorityChannel,
-        10),
+        5),
     priority_channels.NewPriorityChannelWithFreqRatio(
         "Free User",
         freeUserPriorityChannel,
         1),
-}
-
-ch, err := priority_channels.CombineByFrequencyRatio(ctx, priorityChannelsWithFreqRatio)
-if err != nil {
-    // handle error
-}
-
-for {
-    message, channelName, ok := ch.Receive()
-    if !ok {
-        break
-    }
-    fmt.Printf("%s: %s\n", channelName, message)
-}
-```
-
-### Complex example - combination of multiple levels of priority channels
-
-```go
-urgentMessagesC := make(chan string)
-flagshipProductPayingCustomerHighPriorityC := make(chan string)
-flagshipProductPayingCustomerLowPriorityC := make(chan string)
-flagshipProductFreeUserHighPriorityC := make(chan string)
-flagshipProductFreeUserLowPriorityC := make(chan string)
-nicheProductPayingCustomerHighPriorityC := make(chan string)
-nicheProductPayingCustomerLowPriorityC := make(chan string)
-nicheProductFreeUserHighPriorityC := make(chan string)
-nicheProductFreeUserLowPriorityC := make(chan string)
-
-
-flagshipProductPayingCustomerPriorityChannel, err := priority_channels.NewByFrequencyRatio(ctx, []channels.ChannelWithFreqRatio[string]{
-    channels.NewChannelWithFreqRatio(
-        "Flagship Product - Paying Customer - High Priority",
-        flagshipProductPayingCustomerHighPriorityC,
-        5),
-    channels.NewChannelWithFreqRatio(
-        "Flagship Product - Paying Customer - Low Priority",
-        flagshipProductPayingCustomerLowPriorityC,
-        1),
 })
 if err != nil {
     // handle error
 }
 
-flagshipProductFreeUserPriorityChannel, err := priority_channels.NewByFrequencyRatio(ctx, []channels.ChannelWithFreqRatio[string]{
-    channels.NewChannelWithFreqRatio(
-        "Flagship Product - Free User - High Priority",
-        flagshipProductFreeUserHighPriorityC,
-        5),
-    channels.NewChannelWithFreqRatio(
-        "Flagship Product - Free User - Low Priority",
-        flagshipProductFreeUserLowPriorityC,
-        1),
-})
-if err != nil {
-    // handle error
-}
-
-flagshipProductChannelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
-    priority_channels.NewPriorityChannelWithFreqRatio(
-        "Flagship Product - Paying Customer",
-        flagshipProductPayingCustomerPriorityChannel,
-        10),
-    priority_channels.NewPriorityChannelWithFreqRatio(
-        "Flagship Product - Free User",
-        flagshipProductFreeUserPriorityChannel,
-        1),
-}
-flagshipProductChannelGroup, err := priority_channels.CombineByFrequencyRatio(ctx, flagshipProductChannelsWithFreqRatio)
-if err != nil {
-    // handle error
-}
-
-nicheProductPayingCustomerPriorityChannel, err := priority_channels.NewByFrequencyRatio(ctx, []channels.ChannelWithFreqRatio[string]{
-    channels.NewChannelWithFreqRatio(
-        "Niche Product - Paying Customer - High Priority",
-        nicheProductPayingCustomerHighPriorityC,
-        5),
-    channels.NewChannelWithFreqRatio(
-        "Niche Product - Paying Customer - Low Priority",
-        nicheProductPayingCustomerLowPriorityC,
-        1),
-}) 
-if err != nil {
-    // handle error
-}
-
-nicheProductFreeUserPriorityChannel, err := priority_channels.NewByFrequencyRatio[string](ctx, []channels.ChannelWithFreqRatio[string]{
-    channels.NewChannelWithFreqRatio(
-        "Niche Product - Free User - High Priority",
-        nicheProductFreeUserHighPriorityC,
-        5),
-    channels.NewChannelWithFreqRatio(
-        "Niche Product - Free User - Low Priority",
-        nicheProductFreeUserLowPriorityC,
-        1),
-})
-if err != nil {
-    // handle error
-}
-
-nicheProductChannelsWithFreqRatio := []priority_channels.PriorityChannelWithFreqRatio[string]{
-    priority_channels.NewPriorityChannelWithFreqRatio(
-        "Niche Product - Paying Customer", 
-        nicheProductPayingCustomerPriorityChannel,
-        10),
-    priority_channels.NewPriorityChannelWithFreqRatio(
-        "Niche Product - Free User",
-        nicheProductFreeUserPriorityChannel,
-        1),
-}
-nicheProductChannelGroup, err := priority_channels.CombineByFrequencyRatio(ctx, nicheProductChannelsWithFreqRatio)
-if err != nil {
-    // handle error
-} 
-
-combinedProductsPriorityChannel, err := priority_channels.CombineByFrequencyRatio(ctx, []priority_channels.PriorityChannelWithFreqRatio[string]{
-    priority_channels.NewPriorityChannelWithFreqRatio(
-        "Flagship Product",
-        flagshipProductChannelGroup,
-        5),
-    priority_channels.NewPriorityChannelWithFreqRatio(
-        "Niche Product",
-        nicheProductChannelGroup,
-        1),
-})
-if err != nil {
-    // handle error
-}
-
-urgentMessagesPriorityChannel, err := priority_channels.WrapAsPriorityChannel(ctx, 
-    "Urgent Messages", urgentMessagesC)
-if err != nil {
-    // handle error
-}
-
-combinedTotalPriorityChannel, err := priority_channels.CombineByHighestAlwaysFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
+ch, err := priority_channels.CombineByHighestAlwaysFirst(ctx, []priority_channels.PriorityChannelWithPriority[string]{
     priority_channels.NewPriorityChannelWithPriority(
         "Urgent Messages",
         urgentMessagesPriorityChannel,
         10),
     priority_channels.NewPriorityChannelWithPriority(
-        "Combined Products",
-        combinedProductsPriorityChannel,
+        "Combined Users",
+        combinedUsersPriorityChannel,
         1),
 })
 if err != nil {
@@ -373,11 +176,12 @@ if err != nil {
 }
 
 for {
-    message, channelName, ok := combinedTotalPriorityChannel.Receive()
+    message, channelName, ok := ch.Receive()
     if !ok {
         break
     }
     fmt.Printf("%s: %s\n", channelName, message)
 }
-
 ```
+
+
