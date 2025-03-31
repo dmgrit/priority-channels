@@ -20,13 +20,16 @@ The following use cases are supported:
 
 ### Priority channel with highest priority always first
 
-In the example below, messages in the high-priority channel are processed first.  
-If the high-priority channel is empty, messages from the normal-priority channel are processed.  
-The low-priority channel is processed only when both the high and normal-priority channels are empty.    
+In the example below: 
+- Messages in the high-priority channel are processed first.  
+- If the high-priority channel is empty, messages from the normal-priority-1 and normal-priority-2 channels are processed 
+  interchangeably, as they have the same priority.  
+- The low-priority channel is processed only when the high and normal-priority channels are empty.
 
 ```go
 highPriorityC := make(chan string) 
-normalPriorityC := make(chan string) 
+normalPriority1C := make(chan string)
+normalPriority2C := make(chan string)
 lowPriorityC := make(chan string)
 
 // Wrap the Go channels in a slice of channels objects with name and priority properties
@@ -36,8 +39,12 @@ channelsWithPriority := []channels.ChannelWithPriority[string]{
         highPriorityC, 
         10),
     channels.NewChannelWithPriority(
-        "Normal Priority", 
-        normalPriorityC, 
+        "Normal Priority 1", 
+        normalPriority1C, 
+        5),
+    channels.NewChannelWithPriority(
+        "Normal Priority 2",
+        normalPriority2C,
         5),
     channels.NewChannelWithPriority(
         "Low Priority", 
