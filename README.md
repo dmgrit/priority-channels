@@ -20,11 +20,13 @@ The following use cases are supported:
 
 ### Priority channel with highest priority always first
 
-In the example below: 
+In the following scenario: 
 - Messages in the high-priority channel are processed first.  
 - If the high-priority channel is empty, messages from the normal-priority-1 and normal-priority-2 channels are processed 
   interchangeably, as they have the same priority.  
 - The low-priority channel is processed only when the high and normal-priority channels are empty.
+
+For a full demonstration, run the [corresponding example](examples/same-priority/main.go).
 
 ```go
 highPriorityC := make(chan string) 
@@ -107,11 +109,13 @@ for {
 
 ### Combination of priority channels to multiple levels of hierarchy
 
-In this example, we have a tree of priority channels:
+In the following scenario, we have a tree of priority channels:
 - Urgent messages are always processed first.
 - Two groups of channels: paying customers and free users.
 - Paying customers are processed 5 times for every 1 time free users are processed.
 - Within each group, high priority messages are processed 3 times for every 1 time low priority messages are processed.
+
+For a full demonstration, run the [corresponding example](examples/multi-hierarchy/main.go).
 
 ```go
 urgentMessagesC := make(chan string)
