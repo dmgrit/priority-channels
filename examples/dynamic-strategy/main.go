@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -81,12 +82,15 @@ func main() {
 		}
 	}
 
+	demoFilePath := filepath.Join(os.TempDir(), "priority_channels_demo.txt")
+
 	fmt.Printf("Dynamic Strategy Demo:\n")
 	fmt.Printf("- Press 'A' to toggle 'Customer A' reserved time mode\n")
 	fmt.Printf("- Press 'AE' to toggle 'Customer A' reserved exclusive time mode\n")
 	fmt.Printf("- Press 'B' to toggle 'Customer B' reserved time mode\n")
 	fmt.Printf("- Press 'BE' to toggle 'Customer A' reserved exclusive time mode\n")
 	fmt.Printf("- Press 0 to exit\n\n")
+	fmt.Printf("To see the results live, run in another terminal window:\ntail -f %s\n\n", demoFilePath)
 
 	ch, err := priority_channels.NewByStrategy(ctx,
 		strategies.NewDynamic(strategiesByName, currentStrategySelector),
@@ -116,7 +120,7 @@ func main() {
 	}
 
 	go func() {
-		f, err := os.Create("/tmp/priority_channels_demo.txt")
+		f, err := os.Create(demoFilePath)
 		if err != nil {
 			fmt.Printf("Failed to open file: %v\n", err)
 			cancel()

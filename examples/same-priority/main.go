@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -34,9 +35,12 @@ func main() {
 		channels.NewChannelWithPriority("Channel E", inputChannels[7], 1),
 	}
 
+	demoFilePath := filepath.Join(os.TempDir(), "priority_channels_demo.txt")
+
 	fmt.Printf("Same-Priority Demo:\n")
 	fmt.Printf("- Press 'A/B1/B2/B3/C/D1/D2/E' to toggle receiving messages from Channels A/B1/B2/B3/C/D1/D2/E\n")
 	fmt.Printf("- Press 0 to exit\n\n")
+	fmt.Printf("To see the results live, run in another terminal window:\ntail -f %s\n\n", demoFilePath)
 
 	var options []func(*priority_channels.PriorityChannelOptions)
 	options = append(options, priority_channels.WithFrequencyMethod(priority_channels.StrictOrderFully))
@@ -82,7 +86,7 @@ func main() {
 	}
 
 	go func() {
-		f, err := os.Create("/tmp/priority_channels_demo.txt")
+		f, err := os.Create(demoFilePath)
 		if err != nil {
 			fmt.Printf("Failed to open file: %v\n", err)
 			cancel()

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -94,6 +95,8 @@ func main() {
 			100),
 	}, options...)
 
+	demoFilePath := filepath.Join(os.TempDir(), "priority_channels_demo.txt")
+
 	fmt.Printf("Multi-Hierarchy Demo:\n")
 	fmt.Printf("- Press 'A/NA' to start/stop receiving messages from Customer A\n")
 	fmt.Printf("- Press 'B/NB' to start/stop receiving messages from Customer B\n")
@@ -102,6 +105,7 @@ func main() {
 	fmt.Printf("- Press 'U/NU' to start/stop receiving urgent messages\n")
 	fmt.Printf("- Press 'D/ND' to start/stop presenting receive path in tree\n")
 	fmt.Printf("- Press 0 to exit\n\n")
+	fmt.Printf("To see the results live, run in another terminal window:\ntail -f %s\n\n", demoFilePath)
 
 	for i := 1; i <= len(inputChannels); i++ {
 		go func(i int) {
@@ -139,7 +143,7 @@ func main() {
 	var presentDetails atomic.Bool
 
 	go func() {
-		f, err := os.Create("/tmp/priority_channels_demo.txt")
+		f, err := os.Create(demoFilePath)
 		if err != nil {
 			fmt.Printf("Failed to open file: %v\n", err)
 			cancel()
