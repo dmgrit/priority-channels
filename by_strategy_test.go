@@ -116,7 +116,7 @@ func TestProcessMessagesByDynamicStrategy(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ch, err := pc.NewByStrategy(ctx,
-		strategies.NewDynamic(strategiesByName, currentStrategySelector),
+		strategies.NewDynamicByPreconfiguredStrategies(strategiesByName, currentStrategySelector),
 		channels,
 	)
 	if err != nil {
@@ -285,7 +285,7 @@ func TestProcessMessagesByDynamicStrategy_TypeAssertion(t *testing.T) {
 			currentStrategySelector := func() string { return "DayTime" }
 
 			_, err := pc.NewByStrategy(context.Background(),
-				strategies.NewDynamic(strategiesByName, currentStrategySelector),
+				strategies.NewDynamicByPreconfiguredStrategies(strategiesByName, currentStrategySelector),
 				channels,
 			)
 			if err == nil {

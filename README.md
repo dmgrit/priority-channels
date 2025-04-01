@@ -15,6 +15,9 @@ The following use cases are supported:
 - Channel groups by frequency ratio inside group and choose among groups by frequency ratio
 - Tree of priority channels - any combinations of the above to [multiple levels of hierarchy](#combination-of-priority-channels-to-multiple-levels-of-hierarchy)
 
+### Advanced use cases - dynamic prioritization
+- Dynamic frequency ratio selection from list of [preconfigured ratios](#priority-channel-with-dynamic-frequency-ratio) 
+- Dynamic prioritization strategy selection from list of [preconfigured strategies](#priority-channel-with-dynamic-prioritization-strategy)
 
 ## Usage
 
@@ -97,7 +100,7 @@ channelsWithFrequencyRatio := []channels.ChannelWithFreqRatio[string]{
 }
 
 fnCallback := func(message string, channelName string, status priority_channels.ReceiveStatus) {
-	// do something
+    // do something
 }
 
 err := priority_channels.ProcessByFrequencyRatioWithGoroutines(ctx, channelsWithFrequencyRatio, fnCallback)
@@ -230,6 +233,106 @@ for {
         break
     }
     fmt.Printf("%s: %s\n", channelName, message)
+}
+```
+
+### Priority channel with dynamic frequency ratio
+
+In the following scenario, we have two channels with different preconfigured frequency ratios for different time periods.
+
+```go
+customeraC := make(chan string)
+customerbC := make(chan string)
+
+channelsWithDynamicFreqRatio := []channels.ChannelWithWeight[string, map[string]int]{
+    channels.NewChannelWithWeight("Customer A", customeraC,
+        map[string]interface{}{
+            "Regular":              1,
+            "A-Reserved":           5,
+            "B-Reserved":           1,
+        }),
+    channels.NewChannelWithWeight("Customer B", customerbC,
+        map[string]interface{}{
+            "Regular":              1,
+            "A-Reserved":           1,
+            "B-Reserved":           5,
+        }),
+}
+
+func currentStrategySelector func() string {
+    now := time.Now()
+    if now.Weekday() == time.Tuesday && now.Hour() >= 9 && now.Hour() < 12 {
+        return "A-Reserved"    
+    } else if now.Weekday() == time.Thursday && now.Hour() >= 17 && now.Hour() < 19 {
+        return "B-Reserved"
+    }
+    return "Regular"
+}
+
+ch, err := priority_channels.NewDynamicByPreconfiguredFrequencyRatios(ctx,
+    channelsWithDynamicFreqRatio, currentStrategySelector)
+if err != nil {
+    // handle error
+}
+```
+
+### Priority channel with dynamic prioritization strategy
+
+In the following scenario, we have two channels with different preconfigured prioritization strategies for different time periods.
+
+For a full demonstration, run the [corresponding example](examples/dynamic-strategy/main.go).
+
+```go
+customeraC := make(chan string)
+customerbC := make(chan string)
+
+prioritizationMethodsByName := map[string]priority_channels.PrioritizationMethod{
+    "Regular":              priority_channels.ByFrequencyRatio,
+    "A-Reserved":           priority_channels.ByFrequencyRatio,
+    "A-Reserved-Exclusive": priority_channels.ByHighestAlwaysFirst,
+    "B-Reserved":           priority_channels.ByFrequencyRatio,
+    "B-Reserved-Exclusive": priority_channels.ByHighestAlwaysFirst,
+}
+
+channelsWithWeights := []channels.ChannelWithWeight[string, map[string]interface{}]{
+    channels.NewChannelWithWeight("Customer A", customeraC,
+        map[string]interface{}{
+            "Regular":              1,
+            "A-Reserved":           5,
+            "A-Reserved-Exclusive": 2,
+            "B-Reserved":           1,
+            "B-Reserved-Exclusive": 1,
+        }),
+    channels.NewChannelWithWeight("Customer B", customerbC,
+        map[string]interface{}{
+            "Regular":              1,
+            "A-Reserved":           1,
+            "A-Reserved-Exclusive": 1,
+            "B-Reserved":           5,
+            "B-Reserved-Exclusive": 2,
+        }),
+}
+
+func currentStrategySelector func() string {
+    now := time.Now()
+    switch {
+    case now.Weekday() == time.Tuesday && now.Hour() >= 9 && now.Hour() < 11:
+        return "A-Reserved"
+    case now.Weekday() == time.Tuesday && now.Hour() >= 11 && now.Hour() < 12:
+        return "A-Reserved-Exclusive"
+    case now.Weekday() == time.Thursday && now.Hour() >= 17 && now.Hour() < 18:
+        return "B-Reserved"
+    case now.Weekday() == time.Thursday && now.Hour() >= 18 && now.Hour() < 19:
+        return "B-Reserved-Exclusive"
+    default:
+        return "Regular"
+    }
+}
+
+ch, err := priority_channels.NewDynamicByPreconfiguredStrategies(ctx,
+    prioritizationMethodsByName, channelsWithWeights, currentStrategySelector)
+if err != nil {
+    // handle error
 }
 ```
 

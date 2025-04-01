@@ -28,23 +28,23 @@ type DynamicSubStrategy interface {
 	DisableSelectCase(index int)
 }
 
-type Dynamic struct {
+type DynamicByPreconfiguredStrategies struct {
 	strategiesByName          map[string]DynamicSubStrategy
 	currentStrategyName       string
 	currentStrategySelector   func() string
 	origWeightsByStrategyName map[string][]interface{}
 }
 
-func NewDynamic(
+func NewDynamicByPreconfiguredStrategies(
 	strategiesByName map[string]DynamicSubStrategy,
-	currentStrategySelector func() string) *Dynamic {
-	return &Dynamic{
+	currentStrategySelector func() string) *DynamicByPreconfiguredStrategies {
+	return &DynamicByPreconfiguredStrategies{
 		strategiesByName:        strategiesByName,
 		currentStrategySelector: currentStrategySelector,
 	}
 }
 
-func (s *Dynamic) Initialize(weights []map[string]interface{}) error {
+func (s *DynamicByPreconfiguredStrategies) Initialize(weights []map[string]interface{}) error {
 	s.origWeightsByStrategyName = make(map[string][]interface{})
 
 	for channelIndex, weightByStrategyName := range weights {
@@ -65,7 +65,7 @@ func (s *Dynamic) Initialize(weights []map[string]interface{}) error {
 	return nil
 }
 
-func (s *Dynamic) validateChannelWeightsStrategies(channelIndex int, weightByStrategyName map[string]interface{}) error {
+func (s *DynamicByPreconfiguredStrategies) validateChannelWeightsStrategies(channelIndex int, weightByStrategyName map[string]interface{}) error {
 	if len(weightByStrategyName) != len(s.strategiesByName) {
 		return &WeightValidationError{
 			ChannelIndex: channelIndex,
@@ -86,7 +86,7 @@ func (s *Dynamic) validateChannelWeightsStrategies(channelIndex int, weightByStr
 	return nil
 }
 
-func (s *Dynamic) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
+func (s *DynamicByPreconfiguredStrategies) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
 	currentStrategyName := s.currentStrategySelector()
 	if currentStrategyName != s.currentStrategyName {
 		s.currentStrategyName = currentStrategyName
@@ -95,12 +95,12 @@ func (s *Dynamic) NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool) {
 	return strategy.NextSelectCasesRankedIndexes(upto)
 }
 
-func (s *Dynamic) UpdateOnCaseSelected(index int) {
+func (s *DynamicByPreconfiguredStrategies) UpdateOnCaseSelected(index int) {
 	strategy := s.strategiesByName[s.currentStrategyName]
 	strategy.UpdateOnCaseSelected(index)
 }
 
-func (s *Dynamic) DisableSelectCase(index int) {
+func (s *DynamicByPreconfiguredStrategies) DisableSelectCase(index int) {
 	for _, s := range s.strategiesByName {
 		s.DisableSelectCase(index)
 	}

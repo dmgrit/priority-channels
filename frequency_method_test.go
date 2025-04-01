@@ -20,7 +20,7 @@ func TestGetFrequencyStrategy(t *testing.T) {
 
 	var testCases = []struct {
 		name             string
-		level            frequencyStrategyLevel
+		level            priorityChannelLevel
 		mode             *FrequencyMode
 		method           *FrequencyMethod
 		numChannels      int

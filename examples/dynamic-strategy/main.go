@@ -12,9 +12,6 @@ import (
 
 	"github.com/dmgrit/priority-channels"
 	"github.com/dmgrit/priority-channels/channels"
-	"github.com/dmgrit/priority-channels/strategies"
-	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
-	"github.com/dmgrit/priority-channels/strategies/priority_strategies"
 )
 
 func main() {
@@ -24,12 +21,12 @@ func main() {
 	msgsChannels[0] = make(chan string)
 	msgsChannels[1] = make(chan string)
 
-	strategiesByName := map[string]strategies.DynamicSubStrategy{
-		"Regular":              frequency_strategies.NewWithStrictOrderFully(),
-		"A-Reserved":           frequency_strategies.NewWithStrictOrderFully(),
-		"A-Reserved-Exclusive": priority_strategies.NewByHighestAlwaysFirst(),
-		"B-Reserved":           frequency_strategies.NewWithStrictOrderFully(),
-		"B-Reserved-Exclusive": priority_strategies.NewByHighestAlwaysFirst(),
+	prioritizationMethodsByName := map[string]priority_channels.PrioritizationMethod{
+		"Regular":              priority_channels.ByFrequencyRatio,
+		"A-Reserved":           priority_channels.ByFrequencyRatio,
+		"A-Reserved-Exclusive": priority_channels.ByHighestAlwaysFirst,
+		"B-Reserved":           priority_channels.ByFrequencyRatio,
+		"B-Reserved-Exclusive": priority_channels.ByHighestAlwaysFirst,
 	}
 	channelsWithWeights := []channels.ChannelWithWeight[string, map[string]interface{}]{
 		channels.NewChannelWithWeight("Channel A", msgsChannels[0],
@@ -48,6 +45,9 @@ func main() {
 				"B-Reserved":           5,
 				"B-Reserved-Exclusive": 2,
 			}),
+	}
+	options := []func(*priority_channels.PriorityChannelOptions){
+		priority_channels.WithFrequencyMethod(priority_channels.StrictOrderFully),
 	}
 
 	var mode string
@@ -92,10 +92,8 @@ func main() {
 	fmt.Printf("- Press 0 to exit\n\n")
 	fmt.Printf("To see the results live, run in another terminal window:\ntail -f %s\n\n", demoFilePath)
 
-	ch, err := priority_channels.NewByStrategy(ctx,
-		strategies.NewDynamic(strategiesByName, currentStrategySelector),
-		channelsWithWeights,
-	)
+	ch, err := priority_channels.NewDynamicByPreconfiguredStrategies(ctx,
+		prioritizationMethodsByName, channelsWithWeights, currentStrategySelector, options...)
 	if err != nil {
 		fmt.Printf("Failed to create priority channel: %v\n", err)
 		return
