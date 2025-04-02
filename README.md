@@ -8,6 +8,7 @@ The following use cases are supported:
 - **Highest priority always first** - when we always want to process messages [in order of priority](#priority-channel-with-highest-priority-always-first)
 - **Processing by frequency ratio** - when we want to prevent starvation of lower priority messages, either  
   [with goroutines](#processing-channels-by-frequency-ratio-with-goroutines) or [with priority channel](#priority-channel-with-frequency-ratio)
+- **Processing by probability** - when we want to run a simulation of processing messages [with different probabilities](#priority-channel-with-probability)
 
 ### Advanced use cases - priority channel groups
 - Channel groups by highest priority first inside group and choose among groups by frequency ratio
@@ -148,6 +149,47 @@ for {
 }
 ```
 
+### Priority channel with probability
+
+In the example below, messages with high, normal, and low priorities are processed with probabilities of 0.6, 0.25, and 0.15, respectively.
+
+```go
+highPriorityC := make(chan string)
+normalPriorityC := make(chan string)
+lowPriorityC := make(chan string)
+
+// Wrap the Go channels in a slice of channels objects with name and probability value properties
+channelsWithProbability := []channels.ChannelWithWeight[string, float64]{
+    channels.NewChannelWithWeight(
+        "High Priority", 
+        highPriorityC, 
+        0.6),
+    channels.NewChannelWithWeight(
+        "Normal Priority", 
+        normalPriorityC, 
+        0.25),
+    channels.NewChannelWithWeight(
+        "Low Priority", 
+        lowPriorityC, 
+        0.15),
+}
+
+ch, err := priority_channels.NewByStrategy(ctx, 
+    frequency_strategies.NewByProbability(), 
+    channelsWithProbability)
+if err != nil {
+    // handle error
+}
+
+for {
+    message, channelName, ok := ch.Receive()
+    if !ok {
+        break
+    }
+    fmt.Printf("%s: %s\n", channelName, message)
+}
+```
+
 ### Combination of priority channels to multiple levels of hierarchy
 
 In the following scenario, we have a tree of priority channels:
@@ -246,20 +288,20 @@ customerbC := make(chan string)
 
 channelsWithDynamicFreqRatio := []channels.ChannelWithWeight[string, map[string]int]{
     channels.NewChannelWithWeight("Customer A", customeraC,
-        map[string]interface{}{
+        map[string]int{
             "Regular":              1,
             "A-Reserved":           5,
             "B-Reserved":           1,
         }),
     channels.NewChannelWithWeight("Customer B", customerbC,
-        map[string]interface{}{
+        map[string]int{
             "Regular":              1,
             "A-Reserved":           1,
             "B-Reserved":           5,
         }),
 }
 
-func currentStrategySelector func() string {
+currentStrategySelector := func() string {
     now := time.Now()
     if now.Weekday() == time.Tuesday && now.Hour() >= 9 && now.Hour() < 12 {
         return "A-Reserved"    
@@ -313,7 +355,7 @@ channelsWithWeights := []channels.ChannelWithWeight[string, map[string]interface
         }),
 }
 
-func currentStrategySelector func() string {
+currentStrategySelector := func() string {
     now := time.Now()
     switch {
     case now.Weekday() == time.Tuesday && now.Hour() >= 9 && now.Hour() < 11:
