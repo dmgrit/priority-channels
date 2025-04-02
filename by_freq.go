@@ -74,17 +74,14 @@ func ProcessByFrequencyRatioWithGoroutines[T any](ctx context.Context,
 		wg.Wait()
 		select {
 		case <-ctx.Done():
+			if onProcessingFinished != nil {
+				onProcessingFinished(ContextCancelled)
+			}
 			return
 		default:
 			if onProcessingFinished != nil {
 				onProcessingFinished(NoOpenChannels)
 			}
-		}
-	}()
-	go func() {
-		<-ctx.Done()
-		if onProcessingFinished != nil {
-			onProcessingFinished(ContextCancelled)
 		}
 	}()
 	return nil
