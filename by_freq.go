@@ -2,6 +2,7 @@ package priority_channels
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/dmgrit/priority-channels/channels"
@@ -34,9 +35,14 @@ func NewByFrequencyRatio[T any](ctx context.Context,
 
 func ProcessByFrequencyRatioWithGoroutines[T any](ctx context.Context,
 	channelsWithFreqRatios []channels.ChannelWithFreqRatio[T],
-	fnCallback func(msg T, channelName string, status ReceiveStatus)) error {
+	onMessageReceived func(msg T, channelName string),
+	onChannelClosed func(channelName string),
+	onProcessingFinished func(reason ExitReason)) error {
 	if err := validateInputChannels(convertChannelsWithFreqRatioToChannels(channelsWithFreqRatios)); err != nil {
 		return err
+	}
+	if onMessageReceived == nil {
+		return errors.New("onMessageReceived callback is nil")
 	}
 	var wg sync.WaitGroup
 	for i := range channelsWithFreqRatios {
@@ -52,11 +58,13 @@ func ProcessByFrequencyRatioWithGoroutines[T any](ctx context.Context,
 					case msg, ok := <-c.MsgsC():
 						if !ok {
 							closeChannelOnce.Do(func() {
-								fnCallback(getZero[T](), c.ChannelName(), ReceiveChannelClosed)
+								if onChannelClosed != nil {
+									onChannelClosed(c.ChannelName())
+								}
 							})
 							return
 						}
-						fnCallback(msg, c.ChannelName(), ReceiveSuccess)
+						onMessageReceived(msg, c.ChannelName())
 					}
 				}
 			}(channelsWithFreqRatios[i])
@@ -68,12 +76,16 @@ func ProcessByFrequencyRatioWithGoroutines[T any](ctx context.Context,
 		case <-ctx.Done():
 			return
 		default:
-			fnCallback(getZero[T](), "", ReceiveNoOpenChannels)
+			if onProcessingFinished != nil {
+				onProcessingFinished(NoOpenChannels)
+			}
 		}
 	}()
 	go func() {
 		<-ctx.Done()
-		fnCallback(getZero[T](), "", ReceiveContextCancelled)
+		if onProcessingFinished != nil {
+			onProcessingFinished(ContextCancelled)
+		}
 	}()
 	return nil
 }

@@ -25,6 +25,8 @@ func (r ReceiveStatus) ExitReason() ExitReason {
 		return PriorityChannelClosed
 	case ReceiveNoOpenChannels:
 		return NoOpenChannels
+	case ReceiveContextCancelled:
+		return ContextCancelled
 	default:
 		return UnknownExitReason
 	}
@@ -36,6 +38,7 @@ const (
 	ChannelClosed ExitReason = iota
 	PriorityChannelClosed
 	NoOpenChannels
+	ContextCancelled
 	UnknownExitReason
 )
 

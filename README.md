@@ -100,11 +100,28 @@ channelsWithFrequencyRatio := []channels.ChannelWithFreqRatio[string]{
         1),
 }
 
-fnCallback := func(message string, channelName string, status priority_channels.ReceiveStatus) {
+onMessageReceived := func(message string, channelName string) {
     // do something
 }
 
-err := priority_channels.ProcessByFrequencyRatioWithGoroutines(ctx, channelsWithFrequencyRatio, fnCallback)
+onChannelClosed := func(channelName string) {
+    fmt.Printf("Channel %s is closed\n", channelName)
+}
+
+onProcessingFinished := func(reason priority_channels.ExitReason) {
+    if reason == priority_channels.ContextCancelled || 
+        reason == priority_channels.NoOpenChannels {
+        fmt.Printf("Processing has finished, reason %v\n", reason)
+    } else {
+        fmt.Printf("Processing has finished, unexpected reason %v\n", reason)
+    }   
+}
+
+err := priority_channels.ProcessByFrequencyRatioWithGoroutines(ctx, 
+    channelsWithFrequencyRatio, 
+    onMessageReceived,
+    onChannelClosed,
+    onProcessingFinished)
 if err != nil {
     // handle error
 }
@@ -289,15 +306,15 @@ customerbC := make(chan string)
 channelsWithDynamicFreqRatio := []channels.ChannelWithWeight[string, map[string]int]{
     channels.NewChannelWithWeight("Customer A", customeraC,
         map[string]int{
-            "Regular":              1,
-            "A-Reserved":           5,
-            "B-Reserved":           1,
+            "Regular":    1,
+            "A-Reserved": 5,
+            "B-Reserved": 1,
         }),
     channels.NewChannelWithWeight("Customer B", customerbC,
         map[string]int{
-            "Regular":              1,
-            "A-Reserved":           1,
-            "B-Reserved":           5,
+            "Regular":    1,
+            "A-Reserved": 1,
+            "B-Reserved": 5,
         }),
 }
 

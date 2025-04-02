@@ -539,10 +539,7 @@ func TestProcessMessagesByFrequencyRatioWithGoroutines(t *testing.T) {
 				}(allChannels[i], i)
 			}
 
-			fnCallback := func(msg string, channelName string, status pc.ReceiveStatus) {
-				if status != pc.ReceiveSuccess {
-					return
-				}
+			onMessageReceived := func(msg string, channelName string) {
 				mtx.Lock()
 				idx := channelNameToIndex[channelName]
 				m[idx]++
@@ -550,12 +547,27 @@ func TestProcessMessagesByFrequencyRatioWithGoroutines(t *testing.T) {
 				// simulate some activity
 				time.Sleep(50 * time.Microsecond)
 			}
-			err := pc.ProcessByFrequencyRatioWithGoroutines(ctx, channelsWithFreqRatios, fnCallback)
+			processingContextCanceled := make(chan struct{})
+			onProcessingFinished := func(reason pc.ExitReason) {
+				if reason == pc.ContextCancelled {
+					processingContextCanceled <- struct{}{}
+				} else {
+					t.Errorf("Unexpected processing finished reason: %v", reason)
+				}
+			}
+
+			err := pc.ProcessByFrequencyRatioWithGoroutines(ctx, channelsWithFreqRatios, onMessageReceived, nil, onProcessingFinished)
 			if err != nil {
 				t.Fatalf("Unexpected error on calling process by frequency ratio with goroutines: %v", err)
 			}
 
 			wg.Wait()
+
+			select {
+			case <-time.After(10 * time.Second):
+				t.Fatalf("Timeout waiting for ReceiveContextCancelled status")
+			case <-processingContextCanceled:
+			}
 
 			totalSum := 0
 			for _, value := range m {
@@ -631,32 +643,34 @@ func TestProcessMessagesByFrequencyRatioWithGoroutines_StopsOnClosingAllChannels
 	var closedAllChannelsReceived atomic.Bool
 	closedAllChannelsReceivedC := make(chan struct{})
 	var mtx sync.Mutex
-	fnCallback := func(msg string, channelName string, status pc.ReceiveStatus) {
-		if status == pc.ReceiveSuccess {
-			mtx.Lock()
-			idx := channelNameToIndex[channelName]
-			receiveCounts[idx]++
-			mtx.Unlock()
-			// simulate some activity
-			time.Sleep(50 * time.Microsecond)
-			return
-		} else if status == pc.ReceiveChannelClosed {
-			mtx.Lock()
-			if _, exists := closedChannels[channelNameToIndex[channelName]]; exists {
-				t.Errorf("%s is already closed", channelName)
-			}
-			closedChannels[channelNameToIndex[channelName]] = struct{}{}
-			mtx.Unlock()
-		} else if status == pc.ReceiveNoOpenChannels {
+	onMessageReceived := func(msg string, channelName string) {
+		mtx.Lock()
+		idx := channelNameToIndex[channelName]
+		receiveCounts[idx]++
+		mtx.Unlock()
+		// simulate some activity
+		time.Sleep(50 * time.Microsecond)
+	}
+	onChannelClosed := func(channelName string) {
+		mtx.Lock()
+		if _, exists := closedChannels[channelNameToIndex[channelName]]; exists {
+			t.Errorf("%s is already closed", channelName)
+		}
+		closedChannels[channelNameToIndex[channelName]] = struct{}{}
+		mtx.Unlock()
+	}
+	onProcessingFinished := func(reason pc.ExitReason) {
+		if reason == pc.NoOpenChannels {
 			if closedAllChannelsReceived.Load() {
 				t.Errorf("ReceiveNoOpenChannels status received multiple times")
 			}
 			closedAllChannelsReceivedC <- struct{}{}
 		} else {
-			t.Errorf("Unexpected status: %v", status)
+			t.Errorf("Unexpected processing finished reason: %v", reason)
 		}
 	}
-	err := pc.ProcessByFrequencyRatioWithGoroutines(context.Background(), channelsWithFreqRatios, fnCallback)
+	err := pc.ProcessByFrequencyRatioWithGoroutines(context.Background(), channelsWithFreqRatios,
+		onMessageReceived, onChannelClosed, onProcessingFinished)
 	if err != nil {
 		t.Fatalf("Unexpected error on calling process by frequency ratio with goroutines: %v", err)
 	}
