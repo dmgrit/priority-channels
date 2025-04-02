@@ -24,69 +24,7 @@ The following use cases are supported:
 
 ```shell
 go get github.com/dmgrit/priority-channels
-``` 
-
-## Priority Channel API
-
-A central concept of this library is the `PriorityChannel` struct, which allows to process channels with different prioritization strategies.  
-The `PriorityChannel` behaves like a combination of a select statement and a Go channel.  
-
-It takes the following properties from the select statement:  
-- It receives messages from a list of input channels
-- Messages are received atomically - each Receive call gets exactly one message from one specific channel at a time, no more messages are read from any channel.
-- Receive with default case is supported - if no messages are available, `ReceiveDefaultCase` is returned.
-- Receive with context is supported - Receive call can have a context, and if the context is canceled, `ReceiveContextCancelled` is returned.
-- The default behaviour, once any of the input channels is closed, is that any further `Receive` call will return immediately 
-with `ReceiveChannelClosed` for that channel.  
-
-It takes the following properties from the Go channel:
-- It is typed - it is used for receiving messages of a specific type
-- It can be closed - either by canceling the context with which it is initialized or by explicitly calling the Close() method
-- When PriorityChannel is closed, any further `Receive` call immediately returns `ReceivePriorityChannelClosed`
-
-It expands on the select statement by adding the following properties:
-- Each input channel has a name
-- Each input channel has a weight that determines the priority or frequency ratio of the channel
-- It can be combined with other priority channels to form a [tree of priority channels](#combination-of-priority-channels-to-multiple-levels-of-hierarchy)
-- The behaviour of closed input channel can be modified by providing `AutoDisableClosedChannels()` option to the constructor
-- If `AutoDisableClosedChannels()` is set, the closed input channel will be silently disabled and will not be selected for receiving messages.
-  Once all input channels are closed, the `Receive` call will return `ReceiveNoOpenChannels` status.
-
-
-```go
-func (*PriorityChannel[T]) Receive() (msg T, channelName string, ok bool)
-func (*PriorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus)
-func (*PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus)
-func (*PriorityChannel[T]) Close()
 ```
-
-## Combining priority channels
-
-When combining priority channels, additional receive methods can be used to show more information about the source input channel of the message:
-```go
-func (*PriorityChannel[T]) ReceiveEx() (msg T, details ReceiveDetails, ok bool)
-func (*PriorityChannel[T]) ReceiveWithContextEx(ctx context.Context) (msg T, details ReceiveDetails, status ReceiveStatus)
-func (*PriorityChannel[T]) ReceiveWithDefaultCaseEx() (msg T, details ReceiveDetails, status ReceiveStatus)
-
-type ReceiveDetails struct {
-  ChannelName  string
-  ChannelIndex int
-  PathInTree   []ChannelNode
-}
-
-type ChannelNode struct {
-  ChannelName  string
-  ChannelIndex int
-}
-```
-
-The returned `ReceiveDetails` struct contains the following properties:
-- `ChannelName` - the name of the input channel from which the message was received
-- `ChannelIndex` - the index of the input channel in the list of input channels in its direct parent priority channel
-- `PathInTree` - the full path in the tree of priority channels, from the root priority-channel to the direct parent priority-channel 
-of the input channel from which the message was received.
-
-Those are optional, the original `Receive` methods are still available and can be used if the additional information is not needed.
 
 ## Usage
 
@@ -464,4 +402,64 @@ if err != nil {
 }
 ```
 
+## Priority Channel API
+
+A central concept of this library is the `PriorityChannel` struct, which allows to process channels with different prioritization strategies.  
+The `PriorityChannel` behaves like a combination of a select statement and a Go channel.
+
+```go
+func (*PriorityChannel[T]) Receive() (msg T, channelName string, ok bool)
+func (*PriorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus)
+func (*PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus)
+func (*PriorityChannel[T]) Close()
+```
+
+It takes the following properties from the select statement:
+- It receives messages from a list of input channels
+- Messages are received atomically - each Receive call gets exactly one message from one specific channel at a time, no more messages are read from any channel.
+- Receive with default case is supported - if no messages are available, `ReceiveDefaultCase` is returned.
+- Receive with context is supported - Receive call can have a context, and if the context is canceled, `ReceiveContextCancelled` is returned.
+- The default behaviour, once any of the input channels is closed, is that any further `Receive` call will return immediately
+  with `ReceiveChannelClosed` for that channel.
+
+It takes the following properties from the Go channel:
+- It is typed - it is used for receiving messages of a specific type
+- It can be closed - either by canceling the context with which it is initialized or by explicitly calling the Close() method
+- When PriorityChannel is closed, any further `Receive` call immediately returns `ReceivePriorityChannelClosed`
+
+It expands on the select statement by adding the following properties:
+- Each input channel has a name
+- Each input channel has a weight that determines the priority or frequency ratio of the channel
+- It can be combined with other priority channels to form a [tree of priority channels](#combination-of-priority-channels-to-multiple-levels-of-hierarchy)
+- The behaviour of closed input channel can be modified by providing `AutoDisableClosedChannels()` option to the constructor
+- If `AutoDisableClosedChannels()` is set, the closed input channel will be silently disabled and will not be selected for receiving messages.
+  Once all input channels are closed, the `Receive` call will return `ReceiveNoOpenChannels` status.
+
+## Combining priority channels
+
+When combining priority channels, additional receive methods can be used to show more information about the source input channel of the message:
+```go
+func (*PriorityChannel[T]) ReceiveEx() (msg T, details ReceiveDetails, ok bool)
+func (*PriorityChannel[T]) ReceiveWithContextEx(ctx context.Context) (msg T, details ReceiveDetails, status ReceiveStatus)
+func (*PriorityChannel[T]) ReceiveWithDefaultCaseEx() (msg T, details ReceiveDetails, status ReceiveStatus)
+
+type ReceiveDetails struct {
+  ChannelName  string
+  ChannelIndex int
+  PathInTree   []ChannelNode
+}
+
+type ChannelNode struct {
+  ChannelName  string
+  ChannelIndex int
+}
+```
+
+The returned `ReceiveDetails` struct contains the following properties:
+- `ChannelName` - the name of the input channel from which the message was received
+- `ChannelIndex` - the index of the input channel in the list of input channels in its direct parent priority channel
+- `PathInTree` - the full path in the tree of priority channels, from the root priority-channel to the direct parent priority-channel
+  of the input channel from which the message was received.
+
+Those are optional, the original `Receive` methods are still available and can be used if the additional information is not needed.
 
