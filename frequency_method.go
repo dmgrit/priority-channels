@@ -54,14 +54,14 @@ var frequencyModeNames = map[FrequencyMode]string{
 	ProbabilisticMode: "ProbabilisticMode",
 }
 
-type frequencyStrategyLevel int
+type priorityChannelLevel int
 
 const (
-	levelNew frequencyStrategyLevel = iota
+	levelNew priorityChannelLevel = iota
 	levelCombine
 )
 
-func getFrequencyStrategy(level frequencyStrategyLevel, mode *FrequencyMode, method *FrequencyMethod, numChannels int) (PrioritizationStrategy[int], error) {
+func getFrequencyStrategy(level priorityChannelLevel, mode *FrequencyMode, method *FrequencyMethod, numChannels int) (PrioritizationStrategy[int], error) {
 	frequencyMode := ProbabilisticMode
 	if mode != nil {
 		frequencyMode = *mode
