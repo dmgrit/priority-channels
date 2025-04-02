@@ -60,6 +60,34 @@ func (*PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName string, 
 func (*PriorityChannel[T]) Close()
 ```
 
+## Combining priority channels
+
+When combining priority channels, additional receive methods can be used to show more information about the source input channel of the message:
+```go
+func (*PriorityChannel[T]) ReceiveEx() (msg T, details ReceiveDetails, ok bool)
+func (*PriorityChannel[T]) ReceiveWithContextEx(ctx context.Context) (msg T, details ReceiveDetails, status ReceiveStatus)
+func (*PriorityChannel[T]) ReceiveWithDefaultCaseEx() (msg T, details ReceiveDetails, status ReceiveStatus)
+
+type ReceiveDetails struct {
+  ChannelName  string
+  ChannelIndex int
+  PathInTree   []ChannelNode
+}
+
+type ChannelNode struct {
+  ChannelName  string
+  ChannelIndex int
+}
+```
+
+The returned `ReceiveDetails` struct contains the following properties:
+- `ChannelName` - the name of the input channel from which the message was received
+- `ChannelIndex` - the index of the input channel in the list of input channels in its direct parent priority channel
+- `PathInTree` - the full path in the tree of priority channels, from the root priority-channel to the direct parent priority-channel 
+of the input channel from which the message was received.
+
+Those are optional, the original `Receive` methods are still available and can be used if the additional information is not needed.
+
 ## Usage
 
 ### Processing channels by frequency ratio with goroutines
