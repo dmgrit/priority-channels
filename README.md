@@ -20,6 +20,46 @@ The following use cases are supported:
 - Dynamic frequency ratio selection from list of [preconfigured ratios](#priority-channel-with-dynamic-frequency-ratio) 
 - Dynamic prioritization strategy selection from list of [preconfigured strategies](#priority-channel-with-dynamic-prioritization-strategy)
 
+## Installation
+
+```shell
+go get github.com/dmgrit/priority-channels
+``` 
+
+## Priority Channel API
+
+A central concept of this library is the `PriorityChannel` struct, which allows to process channels with different prioritization strategies.  
+The `PriorityChannel` behaves like a combination of a select statement and a Go channel.  
+
+It takes the following properties from the select statement:  
+- It receives messages from a list of input channels
+- Messages are received atomically - each Receive call gets exactly one message from one specific channel at a time, no more messages are read from any channel.
+- Receive with default case is supported - if no messages are available, `ReceiveDefaultCase` is returned.
+- Receive with context is supported - Receive call can have a context, and if the context is canceled, `ReceiveContextCancelled` is returned.
+- The default behaviour, once any of the input channels is closed, is that any further `Receive` call will return immediately 
+with `ReceiveChannelClosed` for that channel.  
+
+It takes the following properties from the Go channel:
+- It is typed - it is used for receiving messages of a specific type
+- It can be closed - either by canceling the context with which it is initialized or by explicitly calling the Close() method
+- When PriorityChannel is closed, any further `Receive` call immediately returns `ReceivePriorityChannelClosed`
+
+It expands on the select statement by adding the following properties:
+- Each input channel has a name
+- Each input channel has a weight that determines the priority or frequency ratio of the channel
+- It can be combined with other priority channels to form a [tree of priority channels](#combination-of-priority-channels-to-multiple-levels-of-hierarchy)
+- The behaviour of closed input channel can be modified by providing `AutoDisableClosedChannels()` option to the constructor
+- If `AutoDisableClosedChannels()` is set, the closed input channel will be silently disabled and will not be selected for receiving messages.
+  Once all input channels are closed, the `Receive` call will return `ReceiveNoOpenChannels` status.
+
+
+```go
+func (*PriorityChannel[T]) Receive() (msg T, channelName string, ok bool)
+func (*PriorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, channelName string, status ReceiveStatus)
+func (*PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName string, status ReceiveStatus)
+func (*PriorityChannel[T]) Close()
+```
+
 ## Usage
 
 ### Processing channels by frequency ratio with goroutines
