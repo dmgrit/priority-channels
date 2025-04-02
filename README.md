@@ -5,15 +5,15 @@ Process Go channels by priority
 The following use cases are supported:
 
 ### Primary use cases
-- **Highest priority always first** - when we always want to process messages in order of priority
-- **Processing by frequency ratio** - when we want to prevent starvation of lower priority messages
+- **Highest priority always first** - when we always want to process messages [in order of priority](#priority-channel-with-highest-priority-always-first)
+- **Processing by frequency ratio** - when we want to prevent starvation of lower priority messages, either  
+  [with goroutines](#processing-channels-by-frequency-ratio-with-goroutines) or [with priority channel](#priority-channel-with-frequency-ratio)
 
 ### Advanced use cases - priority channel groups
 - Channel groups by highest priority first inside group and choose among groups by frequency ratio
 - Channel groups by frequency ratio inside group and choose among groups by highest priority first
 - Channel groups by frequency ratio inside group and choose among groups by frequency ratio
-- Channel groups by highest priority first inside group and choose among groups also by highest priority first
-- Tree of priority channels - any combinations of the above to multiple levels of hierarchy
+- Tree of priority channels - any combinations of the above to [multiple levels of hierarchy](#combination-of-priority-channels-to-multiple-levels-of-hierarchy)
 
 
 ## Usage
@@ -23,7 +23,7 @@ The following use cases are supported:
 In the following scenario: 
 - Messages in the high-priority channel are processed first.  
 - If the high-priority channel is empty, messages from the normal-priority-1 and normal-priority-2 channels are processed 
-  interchangeably, as they have the same priority.  
+  interchangeably since they have the same priority.  
 - The low-priority channel is processed only when the high and normal-priority channels are empty.
 
 For a full demonstration, run the [corresponding example](examples/same-priority/main.go).
@@ -68,9 +68,47 @@ for {
 }
 ```
 
+### Processing channels by frequency ratio with goroutines
+
+In the example below: 
+- Messages with high, normal, and low priorities are processed at a 10:5:1 frequency ratio.  
+- Each priority level has a corresponding number of goroutines, created based on this ratio, to handle message processing.  
+- Processing starts asynchronously and continues until either the given context is canceled or all channels are closed.
+
+```go
+highPriorityC := make(chan string)
+normalPriorityC := make(chan string)
+lowPriorityC := make(chan string)
+
+// Wrap the Go channels in a slice of channels objects with name and frequency ratio properties
+channelsWithFrequencyRatio := []channels.ChannelWithFreqRatio[string]{
+    channels.NewChannelWithFreqRatio(
+        "High Priority", 
+        highPriorityC, 
+        10),
+    channels.NewChannelWithFreqRatio(
+        "Normal Priority", 
+        normalPriorityC, 
+        5),
+    channels.NewChannelWithFreqRatio(
+        "Low Priority", 
+        lowPriorityC, 
+        1),
+}
+
+fnCallback := func(message string, channelName string, status priority_channels.ReceiveStatus) {
+	// do something
+}
+
+err := priority_channels.ProcessByFrequencyRatioWithGoroutines(ctx, channelsWithFrequencyRatio, fnCallback)
+if err != nil {
+    // handle error
+}
+```
+
 ### Priority channel with frequency ratio
 
-In the example below, messages with high, normal, and low priorities will be processed in a ratio of 10:5:1 respectively.
+In the example below, messages with high, normal, and low priorities are processed at a 10:5:1 frequency ratio.
 
 ```go
 highPriorityC := make(chan string)

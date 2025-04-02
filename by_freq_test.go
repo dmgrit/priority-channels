@@ -8,6 +8,8 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -472,6 +474,208 @@ func testProcessMessagesByFrequencyRatio_RandomChannelsListWithMethod(t *testing
 		totalDiff += diff
 	}
 	t.Logf("Total diff: %.5f\n", totalDiff)
+}
+
+func TestProcessMessagesByFrequencyRatioWithGoroutines(t *testing.T) {
+	testCases := []struct {
+		Name     string
+		isSubset bool
+	}{
+		{
+			Name:     "Full list",
+			isSubset: false,
+		},
+		{
+			Name:     "Subset",
+			isSubset: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(*testing.T) {
+			channel1 := make(chan string, 10)
+			channel3 := make(chan string, 10)
+			channel5 := make(chan string, 10)
+			channel10 := make(chan string, 10)
+
+			channelsWithFreqRatios := []channels.ChannelWithFreqRatio[string]{
+				channels.NewChannelWithFreqRatio("Channel 1", channel1, 1),
+				channels.NewChannelWithFreqRatio("Channel 3", channel3, 3),
+				channels.NewChannelWithFreqRatio("Channel 5", channel5, 5),
+				channels.NewChannelWithFreqRatio("Channel 10", channel10, 10),
+			}
+
+			allChannels := []chan string{channel1, channel3, channel5, channel10}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			channelNameToIndex := map[string]int{
+				"Channel 1":  0,
+				"Channel 3":  1,
+				"Channel 5":  2,
+				"Channel 10": 3,
+			}
+			m := make(map[int]int)
+			var mtx sync.Mutex
+
+			var wg sync.WaitGroup
+			// senders
+			for i := 0; i < 4; i++ {
+				wg.Add(1)
+				go func(c chan string, i int) {
+					if tc.isSubset && (i == 0 || i == 1) {
+						wg.Done()
+						return
+					}
+					defer wg.Done()
+					for {
+						select {
+						case <-ctx.Done():
+							return
+						case c <- fmt.Sprintf("channel %d", i):
+						}
+					}
+				}(allChannels[i], i)
+			}
+
+			fnCallback := func(msg string, channelName string, status pc.ReceiveStatus) {
+				if status != pc.ReceiveSuccess {
+					return
+				}
+				mtx.Lock()
+				idx := channelNameToIndex[channelName]
+				m[idx]++
+				mtx.Unlock()
+				// simulate some activity
+				time.Sleep(50 * time.Microsecond)
+			}
+			err := pc.ProcessByFrequencyRatioWithGoroutines(ctx, channelsWithFreqRatios, fnCallback)
+			if err != nil {
+				t.Fatalf("Unexpected error on calling process by frequency ratio with goroutines: %v", err)
+			}
+
+			wg.Wait()
+
+			totalSum := 0
+			for _, value := range m {
+				totalSum += value
+			}
+			actualRatios := make([]float64, 4)
+			for idx, value := range m {
+				actualRatios[idx] = float64(value) / float64(totalSum)
+			}
+			expectedRatios := make([]float64, 4)
+			var expectedRatiosSum int
+			if tc.isSubset {
+				expectedRatiosSum = 5 + 10
+			} else {
+				expectedRatiosSum = 1 + 3 + 5 + 10
+			}
+			freqRatios := []int{1, 3, 5, 10}
+			for idx, value := range freqRatios {
+				if tc.isSubset && (idx == 0 || idx == 1) {
+					continue
+				}
+				expectedRatios[idx] = float64(value) / float64(expectedRatiosSum)
+			}
+
+			t.Logf("Total messages: %d", totalSum)
+			for i := 0; i < 4; i++ {
+				if tc.isSubset && (i == 0 || i == 1) {
+					continue
+				}
+				diff := math.Abs(expectedRatios[i] - actualRatios[i])
+				diffPercentage := (diff / expectedRatios[i]) * 100
+				t.Logf("Channel %d: total messages %d, expected messages ratio %.5f, got %.5f (%.1f%%)",
+					i, m[i], expectedRatios[i], actualRatios[i], diffPercentage)
+			}
+		})
+	}
+}
+
+func TestProcessMessagesByFrequencyRatioWithGoroutines_StopsOnClosingAllChannels(t *testing.T) {
+	channel1 := make(chan string)
+	channel3 := make(chan string)
+	channel5 := make(chan string)
+	channel10 := make(chan string)
+
+	channelsWithFreqRatios := []channels.ChannelWithFreqRatio[string]{
+		channels.NewChannelWithFreqRatio("Channel 1", channel1, 1),
+		channels.NewChannelWithFreqRatio("Channel 3", channel3, 3),
+		channels.NewChannelWithFreqRatio("Channel 5", channel5, 5),
+		channels.NewChannelWithFreqRatio("Channel 10", channel10, 10),
+	}
+
+	allChannels := []chan string{channel1, channel3, channel5, channel10}
+
+	channelNameToIndex := map[string]int{
+		"Channel 1":  0,
+		"Channel 3":  1,
+		"Channel 5":  2,
+		"Channel 10": 3,
+	}
+
+	// senders
+	for i := 0; i < 4; i++ {
+		go func(c chan string, i int) {
+			for j := 0; j < 1000; j++ {
+				c <- fmt.Sprintf("message %d", j)
+			}
+			close(c)
+		}(allChannels[i], i)
+	}
+
+	receiveCounts := make(map[int]int)
+	closedChannels := make(map[int]struct{})
+	var closedAllChannelsReceived atomic.Bool
+	closedAllChannelsReceivedC := make(chan struct{})
+	var mtx sync.Mutex
+	fnCallback := func(msg string, channelName string, status pc.ReceiveStatus) {
+		if status == pc.ReceiveSuccess {
+			mtx.Lock()
+			idx := channelNameToIndex[channelName]
+			receiveCounts[idx]++
+			mtx.Unlock()
+			// simulate some activity
+			time.Sleep(50 * time.Microsecond)
+			return
+		} else if status == pc.ReceiveChannelClosed {
+			mtx.Lock()
+			if _, exists := closedChannels[channelNameToIndex[channelName]]; exists {
+				t.Errorf("%s is already closed", channelName)
+			}
+			closedChannels[channelNameToIndex[channelName]] = struct{}{}
+			mtx.Unlock()
+		} else if status == pc.ReceiveNoOpenChannels {
+			if closedAllChannelsReceived.Load() {
+				t.Errorf("ReceiveNoOpenChannels status received multiple times")
+			}
+			closedAllChannelsReceivedC <- struct{}{}
+		} else {
+			t.Errorf("Unexpected status: %v", status)
+		}
+	}
+	err := pc.ProcessByFrequencyRatioWithGoroutines(context.Background(), channelsWithFreqRatios, fnCallback)
+	if err != nil {
+		t.Fatalf("Unexpected error on calling process by frequency ratio with goroutines: %v", err)
+	}
+
+	select {
+	case <-time.After(10 * time.Second):
+		t.Fatalf("Timeout waiting for ReceiveNoOpenChannels status")
+	case <-closedAllChannelsReceivedC:
+		closedAllChannelsReceived.Store(true)
+	}
+
+	for i := 0; i < 4; i++ {
+		if _, exists := closedChannels[i]; !exists {
+			t.Errorf("Channel %d is not closed", i)
+		}
+		if receiveCounts[i] != 1000 {
+			t.Errorf("Channel %d: expected 1000 messages, got %d", i, receiveCounts[i])
+		}
+	}
 }
 
 func TestProcessMessagesByFrequencyRatio_TenThousandMessages2(t *testing.T) {

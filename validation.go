@@ -3,6 +3,7 @@ package priority_channels
 import (
 	"errors"
 	"fmt"
+	"github.com/dmgrit/priority-channels/channels"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
 )
@@ -29,7 +30,11 @@ func (e *ChannelValidationError) Error() string {
 	return fmt.Sprintf("channel '%s': %v", e.ChannelName, e.Err)
 }
 
-func validateInputChannels[T any](channels []selectable.Channel[T]) error {
+type channelWithName interface {
+	ChannelName() string
+}
+
+func validateInputChannels(channels []channelWithName) error {
 	if len(channels) == 0 {
 		return ErrNoChannels
 	}
@@ -46,10 +51,18 @@ func validateInputChannels[T any](channels []selectable.Channel[T]) error {
 	return nil
 }
 
-func convertChannelsWithWeightsToChannels[T any, W any](channelsWithWeights []selectable.ChannelWithWeight[T, W]) []selectable.Channel[T] {
-	res := make([]selectable.Channel[T], 0, len(channelsWithWeights))
+func convertChannelsWithWeightsToChannels[T any, W any](channelsWithWeights []selectable.ChannelWithWeight[T, W]) []channelWithName {
+	res := make([]channelWithName, 0, len(channelsWithWeights))
 	for _, c := range channelsWithWeights {
 		res = append(res, c)
+	}
+	return res
+}
+
+func convertChannelsWithFreqRatioToChannels[T any](channelsWithWeights []channels.ChannelWithFreqRatio[T]) []channelWithName {
+	res := make([]channelWithName, 0, len(channelsWithWeights))
+	for _, c := range channelsWithWeights {
+		res = append(res, &c)
 	}
 	return res
 }
