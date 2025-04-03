@@ -28,10 +28,13 @@ go get github.com/dmgrit/priority-channels
 
 ## Usage
 
+Below are examples demonstrating how to use the library.  
+For a detailed explanation of priority channels, refer to the [Priority Channel](#priority-channel) section.
+
 ### Processing channels by frequency ratio with goroutines
 
-In the example below: 
-- Messages with high, normal, and low priorities are processed at a 10:5:1 frequency ratio.  
+In the following example: 
+- Messages with high, normal, and low priorities are processed at a frequency ratio of 10:5:1.  
 - Each priority level has a corresponding number of goroutines, created based on this ratio, to handle message processing, 
 total of 16 goroutines (10+5+1).
 - Processing starts asynchronously and continues until either the given context is canceled or all channels are closed.
@@ -86,7 +89,7 @@ if err != nil {
 
 ### Priority channel with frequency ratio
 
-In the example below, messages with high, normal, and low priorities are processed at a 10:5:1 frequency ratio.
+In the following example, messages with high, normal, and low priorities are processed at a frequency ratio of 10:5:1.
 
 ```go
 highPriorityC := make(chan string)
@@ -175,7 +178,7 @@ for {
 
 ### Priority channel with probability
 
-In the example below, messages with high, normal, and low priorities are processed with probabilities of 0.6, 0.25, and 0.15, respectively.
+In the following example, messages with high, normal, and low priorities are processed with probabilities of 0.6, 0.25, and 0.15, respectively.
 
 ```go
 highPriorityC := make(chan string)
@@ -402,7 +405,7 @@ if err != nil {
 }
 ```
 
-## Priority Channel API
+## Priority Channel
 
 A central concept of this library is the `PriorityChannel` struct, which allows to process channels with different prioritization strategies.  
 The `PriorityChannel` behaves like a combination of a select statement and a Go channel.
@@ -416,7 +419,7 @@ func (*PriorityChannel[T]) Close()
 
 It takes the following properties from the select statement:
 - It receives messages from a list of input channels
-- Messages are received atomically - each Receive call gets exactly one message from one specific channel at a time, no more messages are read from any channel.
+- Messages are received atomically - each `Receive` call gets exactly one message from one specific channel at a time, no more messages are read from any channel.
 - Receive with default case is supported - if no messages are available, `ReceiveDefaultCase` is returned.
 - Receive with context is supported - Receive call can have a context, and if the context is canceled, `ReceiveContextCancelled` is returned.
 - The default behaviour, once any of the input channels is closed, is that any further `Receive` call will return immediately
