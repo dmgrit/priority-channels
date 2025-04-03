@@ -8,7 +8,8 @@ The following use cases are supported:
 - **Processing by frequency ratio** - either [with goroutines](#processing-channels-by-frequency-ratio-with-goroutines) or [with priority channel](#priority-channel-with-frequency-ratio).
 - **Highest priority always first** - when we always want to process messages [in order of priority](#priority-channel-with-highest-priority-always-first), 
   regardless of the risk of starvation of lower priority messages
-- **Processing by probability** - when we want to run a simulation of processing messages in a random order [with different probabilities](#priority-channel-with-probability)
+- **Processing by probability** - A variant of frequency ratio processing, where messages are handled randomly 
+[with probabilities](#priority-channel-with-probability) defined as floating-point numbers 
 
 ### Advanced use cases - priority channel groups
 - Channel groups by highest priority first inside group and choose among groups by frequency ratio
