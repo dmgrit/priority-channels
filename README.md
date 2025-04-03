@@ -5,7 +5,7 @@ Process Go channels by priority
 The following use cases are supported:
 
 ### Primary use cases
-- **Processing by frequency ratio** - either [with goroutines](#processing-channels-by-frequency-ratio-with-goroutines) or [with priority channel](#priority-channel-with-frequency-ratio)
+- **Processing by frequency ratio** - either [with goroutines](#processing-channels-by-frequency-ratio-with-goroutines) or [with priority channel](#priority-channel-with-frequency-ratio).
 - **Highest priority always first** - when we always want to process messages [in order of priority](#priority-channel-with-highest-priority-always-first), 
   regardless of the risk of starvation of lower priority messages
 - **Processing by probability** - when we want to run a simulation of processing messages in a random order [with different probabilities](#priority-channel-with-probability)
@@ -19,6 +19,10 @@ The following use cases are supported:
 ### Advanced use cases - dynamic prioritization
 - Dynamic frequency ratio selection from list of [preconfigured ratios](#priority-channel-with-dynamic-frequency-ratio) 
 - Dynamic prioritization strategy selection from list of [preconfigured strategies](#priority-channel-with-dynamic-prioritization-strategy)
+
+### Advanced use cases - selecting frequency method
+- When using priority channels, the [frequency method](#frequency-methods) is selected automatically,
+but it can also be explicitly set to choose specific behavior and performance characteristics
 
 ## Installation
 
@@ -466,3 +470,42 @@ The returned `ReceiveDetails` struct contains the following properties:
 
 Those are optional, the original `Receive` methods are still available and can be used if the additional information is not needed.
 
+## Frequency methods
+
+There are several strategies that can be used to process channels with frequency ratio,
+either by using goroutines, or by using priority channels with one of the following methods:
+- **By select-case duplication** - using select statement with duplicated cases as a means of implementing selection 
+  by frequency ratio
+- **By probability** - using probability to process messages in a random order
+- **With strict-order fully** - custom algorithm that maintains strict order of frequency ratio processing of the given channels
+- **With strict-order across cycles** - custom algorithm that maintains strict order of frequency ratio processing of the given channels
+  across frequency cycles, but does not enforce order of processing of messages within the same cycle  
+
+The following table summarizes the characteristics of each method:  
+
+| Method                      | Level           | Order           | Accuracy                                                                                                                      | Performance                                                                                                                                        |
+|-----------------------------|-----------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| By Goroutines               | New Level Only  | Probabilistic   | Relies on Go scheduler, but tests show it is very accurate<br/>unless message processing time is very short (less than 10 ms) | Fastest method, but requires more resources                                                                                                        |
+| Select Case Duplication     | New Level Only  | Probabilistic   | Pretty accurate - using uniform distribution                                                                                  | Fast if number of cases is not too large, otherwise performance degrades                                                                           |
+| By Probability              | New and Combine | Probabilistic   | Least accurate for maintaining frequency ratio<br/> for not large number of received messages                                 | Moderately fast for all scenarios                                                                                                                  |
+| Strict Order Fully          | New and Combine | Strictest Order | Accurate                                                                                                                      | Fast if messages flow constantly from high-frequency channels, <br/>slower if messages arrive mostly from small subset of lower-frequency channels |
+| Strict Order Across Cycles  | New Level Only  | Strict Order    | Accurate                                                                                                                      | Shares same characteristics with Strict Order Fully, but works faster                                                                              |
+
+  
+When using priority channels, the following frequency method selection algorithm is automatically applied (subject to change)  
+
+| Level     | Order ("Mode") | Selected Method                                                                                                        |
+|-----------|--------------------------|------------------------------------------------------------------------------------------------------------------------|
+| New Level | Default                  | Select Case Duplication<br/>if resulting number of select cases is below threshold (250)<br/>Otherwise, By Probability |
+| New Level | Probabilistic            | Same as in default order for New Level                                                                                 |
+| New Level | StrictOrder              | Strict Order Across Cycles                                                                                             |
+| Combine   | Default                  | By Probability                                                                                                         |
+| Combine   | Probabilistic            | By Probability                                                                             |
+| Combine   | StrictOrder              | Strict Order Fully                                                                                                     |
+
+  
+Upon initialization of the `PriorityChannel` struct (`NewByFrequencyRatio` and `CombineByFrequencyRatio`), 
+optional `WithFrequencyMode()` or `WithFrequencyMethod()` parameters can be passed to influence the selection of the frequency method.
+
+Same parameters can also be passed to the `NewByHighestAlwaysFirst` and `CombineByHighestAlwaysFirst` methods,
+to influence the selection of the frequency method that is applied for subsets of channels having same priority, if such subsets exist.
