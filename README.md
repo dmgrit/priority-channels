@@ -43,6 +43,8 @@ The following use cases are supported:
 ### Advanced use cases - selecting frequency method
 - When using priority channels, the [frequency method](#frequency-methods) is selected automatically,
 but it can also be explicitly set to choose specific behavior and performance characteristics
+  
+Initiation can be done either programmatically or [from a configuration](#combination-of-priority-channels-to-multiple-levels-of-hierarchy-from-configuration) 
 
 ## Installation
 
@@ -331,6 +333,104 @@ for {
     fmt.Printf("%s: %s\n", channelName, message)
 }
 ```
+
+### Combination of priority channels to multiple levels of hierarchy from Configuration
+
+This example is the same as the [previous one](#combination-of-priority-channels-to-multiple-levels-of-hierarchy),  
+but this time, the channels tree is created using a JSON configuration.
+
+```go
+urgentMessagesC := make(chan string)
+payingCustomerHighPriorityC := make(chan string)
+payingCustomerLowPriorityC := make(chan string)
+freeUserHighPriorityC := make(chan string)
+freeUserLowPriorityC := make(chan string)
+
+var priorityConfigurationJson = `
+{
+  "priorityChannel": {
+    "method": "by-highest-always-first",
+    "channels": [
+      {
+        "name": "Urgent Messages",
+        "priority": 10
+      },
+      {
+        "name": "Combined Users",
+        "priority": 1,
+        "priorityChannel": {
+          "method": "by-frequency-ratio",
+          "channels": [
+            {
+              "name": "Paying Customer",
+              "freqRatio": 5,
+              "priorityChannel": {
+                "method": "by-frequency-ratio",
+                "channels": [
+                  {
+                    "name": "Paying Customer - High Priority",
+                    "freqRatio": 3
+                  },
+                  {
+                    "name": "Paying Customer - Low Priority",
+                    "freqRatio": 1
+                  }
+                ]
+              }
+            },
+            {
+              "name": "Free User",
+              "freqRatio": 1,
+              "priorityChannel": {
+                "method": "by-frequency-ratio",
+                "channels": [
+                  {
+                    "name": "Free User - High Priority",
+                    "freqRatio": 3
+                  },
+                  {
+                    "name": "Free User - Low Priority",
+                    "freqRatio": 1
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+`
+
+channelNameToChannel := map[string]<-chan string{
+    "Urgent Messages":                 urgentMessagesC,
+    "Paying Customer - High Priority": payingCustomerHighPriorityC,
+    "Paying Customer - Low Priority":  payingCustomerLowPriorityC,
+    "Free User - High Priority":       freeUserHighPriorityC,
+    "Free User - Low Priority":        freeUserLowPriorityC,
+}
+
+var priorityConfiguration priority_channels.Configuration
+err := json.Unmarshal([]byte(priorityConfigurationJson), &priorityConfiguration)
+if err != nil {
+    // handle error
+}	
+
+ch, err := priority_channels.NewFromConfiguration[string](ctx, priorityConfiguration, channelNameToChannel)
+if err != nil {
+    // handle error
+}
+
+for {
+    message, channelName, ok := ch.Receive()
+    if !ok {
+        break
+    }
+    fmt.Printf("%s: %s\n", channelName, message)
+}
+```
+
 
 ### Priority channel with dynamic frequency ratio
 
