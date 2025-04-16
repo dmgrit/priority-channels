@@ -35,11 +35,11 @@ func (r ReceiveStatus) ExitReason() ExitReason {
 type ExitReason int
 
 const (
-	ChannelClosed ExitReason = iota
+	UnknownExitReason ExitReason = iota
+	ChannelClosed
 	PriorityChannelClosed
 	NoOpenChannels
 	ContextCancelled
-	UnknownExitReason
 )
 
 type PriorityChannelOptions struct {

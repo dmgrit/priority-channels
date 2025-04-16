@@ -93,9 +93,9 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 			var priorityChannel *PriorityChannel[T]
 			var err error
 			if c.PriorityChannelConfig == nil {
-				priorityChannel, err = WrapAsPriorityChannel(ctx, c.Name, channelNameToChannel[c.Name], options...)
+				priorityChannel, err = WrapAsPriorityChannel(context.Background(), c.Name, channelNameToChannel[c.Name], options...)
 			} else {
-				priorityChannel, err = newFromPriorityChannelConfig[T](ctx, *c.PriorityChannelConfig, channelNameToChannel)
+				priorityChannel, err = newFromPriorityChannelConfig[T](context.Background(), *c.PriorityChannelConfig, channelNameToChannel)
 			}
 			if err != nil {
 				return nil, err
@@ -109,9 +109,9 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 			var priorityChannel *PriorityChannel[T]
 			var err error
 			if c.PriorityChannelConfig == nil {
-				priorityChannel, err = WrapAsPriorityChannel(ctx, c.Name, channelNameToChannel[c.Name], options...)
+				priorityChannel, err = WrapAsPriorityChannel(context.Background(), c.Name, channelNameToChannel[c.Name], options...)
 			} else {
-				priorityChannel, err = newFromPriorityChannelConfig[T](ctx, *c.PriorityChannelConfig, channelNameToChannel)
+				priorityChannel, err = newFromPriorityChannelConfig[T](context.Background(), *c.PriorityChannelConfig, channelNameToChannel)
 			}
 			if err != nil {
 				return nil, err

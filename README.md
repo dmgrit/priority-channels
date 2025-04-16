@@ -39,6 +39,7 @@ The following use cases are supported:
 ### Advanced use cases - dynamic prioritization
 - Dynamic frequency ratio selection from list of [preconfigured ratios](#priority-channel-with-dynamic-frequency-ratio) 
 - Dynamic prioritization strategy selection from list of [preconfigured strategies](#priority-channel-with-dynamic-prioritization-strategy)
+- Dynamic prioritization configuration that can be [reconfigured in runtime](#priority-consumer-with-dynamic-priority-channel-that-can-be-reconfigured-in-runtime) 
 
 ### Advanced use cases - selecting frequency method
 - When using priority channels, the [frequency method](#frequency-methods) is selected automatically,
@@ -531,6 +532,60 @@ if err != nil {
     // handle error
 }
 ```
+
+### Priority Consumer with dynamic Priority Channel that can be reconfigured in runtime
+```go
+customeraC := make(chan string)
+customerbC := make(chan string)
+
+channelNameToChannel := map[string]<-chan string{
+    "Customer A": customeraC,
+    "Customer B": customerbC,
+}
+
+priorityConfig := priority_channels.Configuration{
+    PriorityChannel: &priority_channels.PriorityChannelConfig{
+        Method: priority_channels.ByFrequencyRatioMethodConfig,
+        Channels: []priority_channels.ChannelConfig{
+            {Name: "Customer A", FreqRatio: 5},
+            {Name: "Customer B", FreqRatio: 1},
+        },
+    },
+}
+
+consumer, err := priority_channels.NewConsumer(ctx, channelNameToChannel, priorityConfig)
+if err != nil {
+    // handle error
+}
+defer consumer.Close()
+
+msgs, err := consumer.Consume()
+if err != nil {
+    // handle error
+}
+
+go func() {
+    for msg := range msgs {
+        fmt.Printf("Received message: %s\n", msg)
+    }
+}()
+
+priorityConfig2 := priority_channels.Configuration{
+    PriorityChannel: &priority_channels.PriorityChannelConfig{
+    Method: priority_channels.ByFrequencyRatioMethodConfig,
+        Channels: []priority_channels.ChannelConfig{
+            {Name: "Customer A", FreqRatio: 1},
+            {Name: "Customer B", FreqRatio: 3},
+        },
+    },
+}
+
+err = consumer.UpdatePriorityConfiguration(priorityConfig2)
+if err != nil {
+    // handle error
+}
+```
+
 
 ## Priority Channel
 
