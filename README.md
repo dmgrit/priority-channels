@@ -39,7 +39,7 @@ The following use cases are supported:
 ### Advanced use cases - dynamic prioritization
 - Dynamic frequency ratio selection from list of [preconfigured ratios](#priority-channel-with-dynamic-frequency-ratio) 
 - Dynamic prioritization strategy selection from list of [preconfigured strategies](#priority-channel-with-dynamic-prioritization-strategy)
-- Dynamic prioritization configuration that can be [reconfigured in runtime](#priority-consumer-with-dynamic-priority-channel-that-can-be-reconfigured-in-runtime) 
+- Dynamic prioritization configuration that can be [fully reconfigured in runtime](#priority-consumer-with-dynamic-priority-channel-that-can-be-reconfigured-in-runtime) 
 
 ### Advanced use cases - selecting frequency method
 - When using priority channels, the [frequency method](#frequency-methods) is selected automatically,
