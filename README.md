@@ -557,7 +557,7 @@ consumer, err := priority_channels.NewConsumer(ctx, channelNameToChannel, priori
 if err != nil {
     // handle error
 }
-defer consumer.Close()
+defer consumer.Close(true)
 
 msgs, err := consumer.Consume()
 if err != nil {
@@ -663,7 +663,7 @@ The following table summarizes the characteristics of each method:
 
 | Method                      | Level                                                                                                            | Order           | Accuracy                                                                                                                      | Performance                                                                                                                                        |
 |-----------------------------|------------------------------------------------------------------------------------------------------------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
-| By Goroutines               | New Level Only<br/>For Combine, check-out [priority-workers](https://github.com/dmgrit/priority-workers) project | Probabilistic   | Relies on Go scheduler, but tests show it is very accurate<br/>unless message processing time is very short (less than 10 ms) | Fastest method, but requires more resources                                                                                                        |
+| By Goroutines               | New Level Only,<br/>For Combine check-out [priority-workers](https://github.com/dmgrit/priority-workers) project | Probabilistic   | Relies on Go scheduler, but tests show it is very accurate<br/>unless message processing time is very short (less than 10 ms) | Fastest method, but requires more resources                                                                                                        |
 | Select Case Duplication     | New Level Only                                                                                                   | Probabilistic   | Pretty accurate - using uniform distribution                                                                                  | Fast if number of cases is not too large, otherwise performance degrades                                                                           |
 | By Probability              | New and Combine                                                                                                  | Probabilistic   | Least accurate for maintaining frequency ratio<br/> for not large number of received messages                                 | Moderately fast for all scenarios                                                                                                                  |
 | Strict Order Fully          | New and Combine                                                                                                  | Strictest Order | Accurate                                                                                                                      | Fast if messages flow constantly from high-frequency channels, <br/>slower if messages arrive mostly from small subset of lower-frequency channels |
