@@ -15,8 +15,8 @@ type PriorityConsumer[T any] struct {
 	priorityChannelUpdatesMtx sync.Mutex
 	priorityChannelUpdatesC   chan *PriorityChannel[T]
 	priorityChannelClosedC    chan struct{}
-	isClosing                 bool
-	isClosed                  bool
+	isStopping                bool
+	isStopped                 bool
 	exitReason                ExitReason
 	exitReasonChannelName     string
 }
@@ -45,8 +45,8 @@ func (c *PriorityConsumer[T]) Consume() (<-chan T, error) {
 
 	if c.priorityChannelUpdatesC != nil {
 		return nil, errors.New("consume already called")
-	} else if c.isClosing {
-		return nil, errors.New("cannot consume after closing")
+	} else if c.isStopping {
+		return nil, errors.New("cannot consume after stopping")
 	}
 
 	deliveries := make(chan T)
@@ -86,8 +86,8 @@ func (c *PriorityConsumer[T]) UpdatePriorityConfiguration(priorityConfiguration 
 	if c.priorityChannelUpdatesC == nil {
 		return errors.New("cannot update priority channel configuration before consuming has started")
 	}
-	if c.isClosing {
-		return errors.New("cannot update priority channel configuration after closing")
+	if c.isStopping {
+		return errors.New("cannot update priority channel configuration after stopping")
 	}
 
 	priorityChannel, err := NewFromConfiguration(c.ctx, priorityConfiguration, c.channelNameToChannel)
@@ -107,12 +107,24 @@ func (c *PriorityConsumer[T]) UpdatePriorityConfiguration(priorityConfiguration 
 	return nil
 }
 
-func (c *PriorityConsumer[T]) Close(wait bool) {
+func (c *PriorityConsumer[T]) StopAsync() {
+	c.stop(false)
+}
+
+func (c *PriorityConsumer[T]) StopAndWait() {
+	c.stop(true)
+}
+
+func (c *PriorityConsumer[T]) Done() <-chan struct{} {
+	return c.priorityChannelClosedC
+}
+
+func (c *PriorityConsumer[T]) stop(wait bool) {
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
-	if !c.isClosing {
-		c.isClosing = true
+	if !c.isStopping {
+		c.isStopping = true
 		close(c.priorityChannelUpdatesC)
 	}
 
@@ -121,11 +133,11 @@ func (c *PriorityConsumer[T]) Close(wait bool) {
 	}
 }
 
-func (c *PriorityConsumer[T]) IsClosed() (bool, ExitReason, string) {
+func (c *PriorityConsumer[T]) Status() (stopped bool, reason ExitReason, channelName string) {
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
-	if c.isClosed {
+	if c.isStopped {
 		return true, c.exitReason, c.exitReasonChannelName
 	}
 	return false, UnknownExitReason, ""
@@ -135,7 +147,7 @@ func (c *PriorityConsumer[T]) setClosed(exitReason ExitReason, exitReasonChannel
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
-	c.isClosed = true
+	c.isStopped = true
 	c.exitReason = exitReason
 	c.exitReasonChannelName = exitReasonChannelName
 	close(c.priorityChannelClosedC)

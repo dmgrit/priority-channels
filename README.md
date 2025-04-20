@@ -557,7 +557,6 @@ consumer, err := priority_channels.NewConsumer(ctx, channelNameToChannel, priori
 if err != nil {
     // handle error
 }
-defer consumer.Close(true)
 
 msgs, err := consumer.Consume()
 if err != nil {
@@ -584,6 +583,12 @@ err = consumer.UpdatePriorityConfiguration(priorityConfig2)
 if err != nil {
     // handle error
 }
+
+// To stop, use either
+consumer.StopAndWait()
+// or
+consumer.StopAsync()
+<- consumer.Done()
 ```
 
 
