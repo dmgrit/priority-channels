@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/dmgrit/priority-channels/channels"
+	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
 
 type Configuration struct {
@@ -16,6 +17,7 @@ type PriorityChannelMethodConfig string
 const (
 	ByHighestAlwaysFirstMethodConfig PriorityChannelMethodConfig = "by-highest-always-first"
 	ByFrequencyRatioMethodConfig     PriorityChannelMethodConfig = "by-frequency-ratio"
+	ByProbabilityMethodConfig        PriorityChannelMethodConfig = "by-probability"
 )
 
 type PriorityChannelConfig struct {
@@ -25,9 +27,10 @@ type PriorityChannelConfig struct {
 }
 
 type ChannelConfig struct {
-	Name                   string `json:"name"`
-	Priority               int    `json:"priority,omitempty"`
-	FreqRatio              int    `json:"freqRatio,omitempty"`
+	Name                   string  `json:"name"`
+	Priority               int     `json:"priority,omitempty"`
+	FreqRatio              int     `json:"freqRatio,omitempty"`
+	Probability            float64 `json:"probability,omitempty"`
 	*PriorityChannelConfig `json:"priorityChannel,omitempty"`
 }
 
@@ -81,6 +84,16 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 				channelsWithFreqRatio = append(channelsWithFreqRatio, channels.NewChannelWithFreqRatio(c.Name, channel, c.FreqRatio))
 			}
 			return NewByFrequencyRatio(ctx, channelsWithFreqRatio, options...)
+		case ByProbabilityMethodConfig:
+			channelsWithProbability := make([]channels.ChannelWithWeight[T, float64], 0, len(config.Channels))
+			for _, c := range config.Channels {
+				channel, ok := channelNameToChannel[c.Name]
+				if !ok {
+					return nil, fmt.Errorf("channel %s not found", c.Name)
+				}
+				channelsWithProbability = append(channelsWithProbability, channels.NewChannelWithWeight(c.Name, channel, c.Probability))
+			}
+			return NewByStrategy(ctx, frequency_strategies.NewByProbability(), channelsWithProbability, options...)
 		default:
 			return nil, fmt.Errorf("unknown type %s", config.Method)
 		}
@@ -119,6 +132,22 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 			priorityChannelsWithFreqRatio = append(priorityChannelsWithFreqRatio, NewPriorityChannelWithFreqRatio(c.Name, priorityChannel, c.FreqRatio))
 		}
 		return CombineByFrequencyRatio(ctx, priorityChannelsWithFreqRatio, options...)
+	case ByProbabilityMethodConfig:
+		priorityChannelsWithProbability := make([]PriorityChannelWithWeight[T, float64], 0, len(config.Channels))
+		for _, c := range config.Channels {
+			var priorityChannel *PriorityChannel[T]
+			var err error
+			if c.PriorityChannelConfig == nil {
+				priorityChannel, err = WrapAsPriorityChannel(context.Background(), c.Name, channelNameToChannel[c.Name], options...)
+			} else {
+				priorityChannel, err = newFromPriorityChannelConfig[T](context.Background(), *c.PriorityChannelConfig, channelNameToChannel)
+			}
+			if err != nil {
+				return nil, err
+			}
+			priorityChannelsWithProbability = append(priorityChannelsWithProbability, NewPriorityChannelWithWeight(c.Name, priorityChannel, c.Probability))
+		}
+		return CombineByStrategy(ctx, frequency_strategies.NewByProbability(), priorityChannelsWithProbability, options...)
 	}
 
 	return nil, fmt.Errorf("unknown type %s", config.Method)
