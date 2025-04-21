@@ -134,7 +134,7 @@ func (c *PriorityConsumer[T]) Done() <-chan struct{} {
 	return c.priorityChannelClosedC
 }
 
-func (c *PriorityConsumer[T]) stop(wait bool, onMessageDrop func(msg T, channelName string)) {
+func (c *PriorityConsumer[T]) stop(graceful bool, onMessageDrop func(msg T, channelName string)) {
 	c.priorityChannelUpdatesMtx.Lock()
 	if !c.isStopping {
 		c.isStopping = true
@@ -144,11 +144,10 @@ func (c *PriorityConsumer[T]) stop(wait bool, onMessageDrop func(msg T, channelN
 	}
 	c.priorityChannelUpdatesMtx.Unlock()
 
-	if wait {
-		<-c.priorityChannelClosedC
-	} else {
+	if !graceful {
 		c.forceShutdownChannel <- struct{}{}
 	}
+	<-c.priorityChannelClosedC
 }
 
 // Status returns whether the consumer is stopped, and if so, the reason for stopping and,
