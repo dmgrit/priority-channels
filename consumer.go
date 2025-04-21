@@ -15,6 +15,8 @@ type PriorityConsumer[T any] struct {
 	priorityChannelUpdatesMtx sync.Mutex
 	priorityChannelUpdatesC   chan *PriorityChannel[T]
 	priorityChannelClosedC    chan struct{}
+	forceShutdownChannel      chan struct{}
+	onMessageDrop             func(msg T, channelName string)
 	isStopping                bool
 	isStopped                 bool
 	exitReason                ExitReason
@@ -36,6 +38,7 @@ func NewConsumer[T any](
 		channelNameToChannel:   channelNameToChannel,
 		priorityChannelConfig:  priorityConfiguration,
 		priorityChannelClosedC: make(chan struct{}),
+		forceShutdownChannel:   make(chan struct{}),
 	}, nil
 }
 
@@ -71,7 +74,15 @@ func (c *PriorityConsumer[T]) Consume() (<-chan T, error) {
 					c.setClosed(status.ExitReason(), channelName)
 					return
 				}
-				deliveries <- msg
+				select {
+				case deliveries <- msg:
+				case <-c.forceShutdownChannel:
+					if c.onMessageDrop != nil {
+						c.onMessageDrop(msg, channelName)
+					}
+					c.setClosed(PriorityChannelClosed, "")
+					return
+				}
 			}
 		}
 	}()
@@ -107,32 +118,41 @@ func (c *PriorityConsumer[T]) UpdatePriorityConfiguration(priorityConfiguration 
 	return nil
 }
 
-func (c *PriorityConsumer[T]) StopAsync() {
-	c.stop(false)
+// StopGracefully stops the consumer with a graceful shutdown, draining the unprocessed messages before stopping.
+func (c *PriorityConsumer[T]) StopGracefully() {
+	c.stop(true, nil)
 }
 
-func (c *PriorityConsumer[T]) StopAndWait() {
-	c.stop(true)
+// StopImmediately stops the consumer in a forced manner.
+// onMessageDrop is called when a message is dropped. It is optional and can be nil, in this case the message will be silently dropped.
+func (c *PriorityConsumer[T]) StopImmediately(onMessageDrop func(msg T, channelName string)) {
+	c.stop(false, onMessageDrop)
 }
 
+// Done returns a channel that is closed when the consumer is stopped.
 func (c *PriorityConsumer[T]) Done() <-chan struct{} {
 	return c.priorityChannelClosedC
 }
 
-func (c *PriorityConsumer[T]) stop(wait bool) {
+func (c *PriorityConsumer[T]) stop(wait bool, onMessageDrop func(msg T, channelName string)) {
 	c.priorityChannelUpdatesMtx.Lock()
-	defer c.priorityChannelUpdatesMtx.Unlock()
-
 	if !c.isStopping {
 		c.isStopping = true
+		c.onMessageDrop = onMessageDrop
+		c.priorityChannel.Close()
 		close(c.priorityChannelUpdatesC)
 	}
+	c.priorityChannelUpdatesMtx.Unlock()
 
 	if wait {
 		<-c.priorityChannelClosedC
+	} else {
+		c.forceShutdownChannel <- struct{}{}
 	}
 }
 
+// Status returns whether the consumer is stopped, and if so, the reason for stopping and,
+// in case the reason is a closed channel, the name of the channel that was closed.
 func (c *PriorityConsumer[T]) Status() (stopped bool, reason ExitReason, channelName string) {
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
