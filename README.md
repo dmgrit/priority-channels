@@ -584,11 +584,7 @@ if err != nil {
     // handle error
 }
 
-// To stop, use either
-consumer.StopAndWait()
-// or
-consumer.StopAsync()
-<- consumer.Done()
+consumer.StopGracefully()
 ```
 
 
