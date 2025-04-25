@@ -1,0 +1,19 @@
+{
+  "priorityChannel": {
+    "method": "by-highest-always-first",
+    "channels": [
+      {
+        "name": "Channel A",
+        "priority": 3 
+      },
+      {
+        "name": "Channel B",
+        "priority": 2
+      },
+      {
+        "name": "Channel C",
+        "priority": 1
+      }
+    ]
+  }
+}

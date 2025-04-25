@@ -1,0 +1,19 @@
+{
+  "priorityChannel": {
+    "method": "by-frequency-ratio",
+    "channels": [
+      {
+        "name": "Channel A",
+        "freqRatio": 6 
+      },
+      {
+        "name": "Channel B",
+        "freqRatio": 3 
+      },
+      {
+        "name": "Channel C",
+        "freqRatio": 1
+      }
+    ]
+  }
+}

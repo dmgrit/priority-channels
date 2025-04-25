@@ -1,0 +1,28 @@
+{
+  "priorityChannel": {
+    "method": "by-highest-always-first",
+    "channels": [
+      {
+        "name": "Channel A",
+        "priority": 10
+      },
+      {
+        "name": "Regular Processing",
+        "priority": 1,
+        "priorityChannel": {
+          "method": "by-frequency-ratio",
+          "channels": [
+            {
+              "name": "Channel B",
+              "freqRatio": 3 
+            },
+            {
+              "name": "Channel C",
+              "freqRatio": 1
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
