@@ -20,10 +20,40 @@ const (
 	ByProbabilityMethodConfig        PriorityChannelMethodConfig = "by-probability"
 )
 
+type PriorityChannelFrequencyMethodConfig string
+
+const (
+	StrictOrderAcrossCyclesFrequencyMethodConfig          PriorityChannelFrequencyMethodConfig = "strict-order-across-cycles"
+	StrictOrderFullyFrequencyMethodConfig                 PriorityChannelFrequencyMethodConfig = "strict-order-fully"
+	ProbabilisticByCaseDuplicationFrequencyMethodConfig   PriorityChannelFrequencyMethodConfig = "case-duplication"
+	ProbabilisticByMultipleRandCallsFrequencyMethodConfig PriorityChannelFrequencyMethodConfig = "by-probability"
+)
+
+var frequencyMethodConfigToFrequencyMethod = map[PriorityChannelFrequencyMethodConfig]FrequencyMethod{
+	StrictOrderAcrossCyclesFrequencyMethodConfig:          StrictOrderAcrossCycles,
+	StrictOrderFullyFrequencyMethodConfig:                 StrictOrderFully,
+	ProbabilisticByCaseDuplicationFrequencyMethodConfig:   ProbabilisticByCaseDuplication,
+	ProbabilisticByMultipleRandCallsFrequencyMethodConfig: ProbabilisticByMultipleRandCalls,
+}
+
+type PriorityChannelFrequencyModeConfig string
+
+const (
+	StrictOrderModeFrequencyModeConfig   PriorityChannelFrequencyModeConfig = "strict-order"
+	ProbabilisticModeFrequencyModeConfig PriorityChannelFrequencyModeConfig = "probabilistic"
+)
+
+var frequencyModeConfigToFrequencyMode = map[PriorityChannelFrequencyModeConfig]FrequencyMode{
+	StrictOrderModeFrequencyModeConfig:   StrictOrderMode,
+	ProbabilisticModeFrequencyModeConfig: ProbabilisticMode,
+}
+
 type PriorityChannelConfig struct {
-	Method                    PriorityChannelMethodConfig `json:"method"`
-	Channels                  []ChannelConfig             `json:"channels"`
-	AutoDisableClosedChannels bool                        `json:"autoDisableClosedChannels,omitempty"`
+	Method                    PriorityChannelMethodConfig          `json:"method"`
+	Channels                  []ChannelConfig                      `json:"channels"`
+	AutoDisableClosedChannels bool                                 `json:"autoDisableClosedChannels,omitempty"`
+	FrequencyMode             PriorityChannelFrequencyModeConfig   `json:"frequencyMode,omitempty"`
+	FrequencyMethod           PriorityChannelFrequencyMethodConfig `json:"frequencyMethod,omitempty"`
 }
 
 type ChannelConfig struct {
@@ -45,6 +75,20 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 	var options []func(*PriorityChannelOptions)
 	if config.AutoDisableClosedChannels {
 		options = append(options, AutoDisableClosedChannels())
+	}
+	if config.FrequencyMode != "" {
+		frequencyMode, ok := frequencyModeConfigToFrequencyMode[config.FrequencyMode]
+		if !ok {
+			return nil, fmt.Errorf("unknown frequency mode %s", config.FrequencyMode)
+		}
+		options = append(options, WithFrequencyMode(frequencyMode))
+	}
+	if config.FrequencyMethod != "" {
+		frequencyMethod, ok := frequencyMethodConfigToFrequencyMethod[config.FrequencyMethod]
+		if !ok {
+			return nil, fmt.Errorf("unknown frequency method %s", config.FrequencyMethod)
+		}
+		options = append(options, WithFrequencyMethod(frequencyMethod))
 	}
 	var isCombinedPriorityChannel bool
 	for _, c := range config.Channels {

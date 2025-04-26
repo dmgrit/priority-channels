@@ -151,21 +151,24 @@ func main() {
 				return
 			case <-tickerCh:
 				receivedMsgsMutex.Lock()
-				_, _ = f.WriteString(fmt.Sprintf("Received %d messages in the last 5 seconds (%.2f messages per second)\n", receivedMsgs, float64(receivedMsgs)/5))
-				var messages []channelStatsMessage
-				for name, val := range byChannelName {
-					messages = append(messages, channelStatsMessage{
-						ChannelName: name,
-						Message:     fmt.Sprintf("%d messages (%.2f%%)", val, float64(val)/float64(receivedMsgs)*100),
+				_, _ = f.WriteString(strings.Repeat("=", 80) + "\n")
+				if receivedMsgs > 0 {
+					_, _ = f.WriteString(fmt.Sprintf("Received %d messages in the last 5 seconds (%.2f messages per second)\n", receivedMsgs, float64(receivedMsgs)/5))
+					var messages []channelStatsMessage
+					for name, val := range byChannelName {
+						messages = append(messages, channelStatsMessage{
+							ChannelName: name,
+							Message:     fmt.Sprintf("%d messages (%.2f%%)", val, float64(val)/float64(receivedMsgs)*100),
+						})
+					}
+					sort.Slice(messages, func(i, j int) bool {
+						return channelsOrder[messages[i].ChannelName] < channelsOrder[messages[j].ChannelName]
 					})
-				}
-				sort.Slice(messages, func(i, j int) bool {
-					return channelsOrder[messages[i].ChannelName] < channelsOrder[messages[j].ChannelName]
-				})
-				for _, msg := range messages {
-					_, _ = f.WriteString(fmt.Sprintf("%s: %s\n", msg.ChannelName, msg.Message))
-				}
-				if receivedMsgs == 0 {
+					for _, msg := range messages {
+						_, _ = f.WriteString(fmt.Sprintf("%s: %s\n", msg.ChannelName, msg.Message))
+					}
+				} else {
+					_, _ = f.WriteString("No messages received in the last 5 seconds\n")
 					stopped, reason, channelName := wp.Status()
 					if stopped {
 						switch reason {
@@ -182,6 +185,7 @@ func main() {
 						}
 					}
 				}
+				_, _ = f.WriteString(strings.Repeat("=", 80) + "\n")
 
 				receivedMsgs = 0
 				byChannelName = make(map[string]int)
