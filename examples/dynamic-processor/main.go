@@ -136,7 +136,7 @@ func main() {
 
 	fmt.Printf("Dynamic-Priority-Processor Demo:\n")
 	fmt.Printf("- Press 'a/b/c' to toggle receiving messages from Channels A/B/C\n")
-	fmt.Printf("- Press 'w <workers_nam>' to update number of workers in the worker pool\n")
+	fmt.Printf("- Press 'w <workers_num>' to update number of workers in the worker pool\n")
 	fmt.Printf("- Press 'l <priority_configuration_file>' to load a different priority configuration\n")
 	fmt.Printf("- Press 'w' or 'workers' to see the number of worker goroutines configured in the worker pool\n")
 	fmt.Printf("- Press 'active' to see the number of goroutines currently processing messages\n")

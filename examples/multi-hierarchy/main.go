@@ -94,6 +94,10 @@ func main() {
 			urgentMessagesPriorityChannel,
 			100),
 	}, options...)
+	if err != nil {
+		fmt.Printf("Unexpected error on priority channel intialization: %v\n", err)
+		return
+	}
 
 	demoFilePath := filepath.Join(os.TempDir(), "priority_channels_demo.txt")
 
@@ -266,7 +270,7 @@ func main() {
 			}
 			upperLine = strings.TrimPrefix(upperLine, "C")
 			number, err := strconv.Atoi(upperLine)
-			if err != nil || number < 0 || number > channelsNum {
+			if err != nil || number <= 0 || number > channelsNum {
 				continue
 			}
 			fmt.Printf("Closing Channel %d\n", number)
