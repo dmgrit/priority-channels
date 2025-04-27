@@ -558,14 +558,14 @@ if err != nil {
     // handle error
 }
 
-msgs, err := consumer.Consume()
+deliveries, err := consumer.Consume()
 if err != nil {
     // handle error
 }
 
 go func() {
-    for msg := range msgs {
-        fmt.Printf("Received message: %s\n", msg)
+    for d := range deliveries {
+        fmt.Printf("%s: %s\n", d.ReceiveDetails.ChannelName, d.Msg)
     }
 }()
 
