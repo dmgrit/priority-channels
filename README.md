@@ -558,20 +558,20 @@ if err != nil {
     // handle error
 }
 
-msgs, err := consumer.Consume()
+deliveries, err := consumer.Consume()
 if err != nil {
     // handle error
 }
 
 go func() {
-    for msg := range msgs {
-        fmt.Printf("Received message: %s\n", msg)
+    for d := range deliveries {
+        fmt.Printf("%s: %s\n", d.ReceiveDetails.ChannelName, d.Msg)
     }
 }()
 
 priorityConfig2 := priority_channels.Configuration{
     PriorityChannel: &priority_channels.PriorityChannelConfig{
-    Method: priority_channels.ByFrequencyRatioMethodConfig,
+        Method: priority_channels.ByFrequencyRatioMethodConfig,
         Channels: []priority_channels.ChannelConfig{
             {Name: "Customer A", FreqRatio: 1},
             {Name: "Customer B", FreqRatio: 3},

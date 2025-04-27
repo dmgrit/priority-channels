@@ -7,12 +7,12 @@ import (
 
 type DynamicPriorityProcessor[T any] struct {
 	consumer   *PriorityConsumer[T]
-	workerPool *workerpool.DynamicWorkerPool[T]
+	workerPool *workerpool.DynamicWorkerPool[Delivery[T]]
 }
 
 func NewDynamicPriorityProcessor[T any](
 	ctx context.Context,
-	processFn func(T),
+	processFn func(Delivery[T]),
 	channelNameToChannel map[string]<-chan T,
 	priorityConfiguration Configuration,
 	workersNum int) (*DynamicPriorityProcessor[T], error) {

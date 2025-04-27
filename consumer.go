@@ -23,6 +23,11 @@ type PriorityConsumer[T any] struct {
 	exitReasonChannelName     string
 }
 
+type Delivery[T any] struct {
+	Msg            T
+	ReceiveDetails ReceiveDetails
+}
+
 func NewConsumer[T any](
 	ctx context.Context,
 	channelNameToChannel map[string]<-chan T,
@@ -42,7 +47,7 @@ func NewConsumer[T any](
 	}, nil
 }
 
-func (c *PriorityConsumer[T]) Consume() (<-chan T, error) {
+func (c *PriorityConsumer[T]) Consume() (<-chan Delivery[T], error) {
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
@@ -52,7 +57,7 @@ func (c *PriorityConsumer[T]) Consume() (<-chan T, error) {
 		return nil, errors.New("cannot consume after stopping")
 	}
 
-	deliveries := make(chan T)
+	deliveries := make(chan Delivery[T])
 	c.priorityChannelUpdatesC = make(chan *PriorityChannel[T], 1)
 	go func() {
 		defer close(deliveries)
@@ -69,13 +74,14 @@ func (c *PriorityConsumer[T]) Consume() (<-chan T, error) {
 				// There is no context per-message, but there is a single context for the entire priority-channel
 				// On receiving the message we do not pass any specific context,
 				// but on processing the message we pass the priority-channel context
-				msg, channelName, status := c.priorityChannel.ReceiveWithContext(context.Background())
+				msg, receiveDetails, status := c.priorityChannel.ReceiveWithContextEx(context.Background())
+				channelName := receiveDetails.ChannelName
 				if status != ReceiveSuccess {
 					c.setClosed(status.ExitReason(), channelName)
 					return
 				}
 				select {
-				case deliveries <- msg:
+				case deliveries <- Delivery[T]{Msg: msg, ReceiveDetails: receiveDetails}:
 				case <-c.forceShutdownChannel:
 					if c.onMessageDrop != nil {
 						c.onMessageDrop(msg, channelName)

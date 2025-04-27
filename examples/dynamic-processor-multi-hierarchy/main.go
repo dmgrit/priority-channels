@@ -43,13 +43,6 @@ func main() {
 		"Customer B - Low Priority":  4,
 		"Urgent Messages":            5,
 	}
-	channelsByNum := map[int]string{
-		1: "Customer A - High Priority",
-		2: "Customer A - Low Priority",
-		3: "Customer B - High Priority",
-		4: "Customer B - Low Priority",
-		5: "Urgent Messages",
-	}
 
 	priorityConfig := priority_channels.Configuration{
 		PriorityChannel: &priority_channels.PriorityChannelConfig{
@@ -117,12 +110,22 @@ func main() {
 	receivedMsgs := 0
 	byChannelName := make(map[string]int)
 	var receivedMsgsMutex sync.Mutex
-	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, func(msg string) {
+	var presentDetails atomic.Bool
+
+	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, func(d priority_channels.Delivery[string]) {
 		time.Sleep(100 * time.Millisecond)
 		receivedMsgsMutex.Lock()
 		receivedMsgs++
-		channelName := strings.Split(msg, ":")[0]
-		byChannelName[channelName] = byChannelName[channelName] + 1
+		fullChannelPath := ""
+		if presentDetails.Load() {
+			for _, channelNode := range d.ReceiveDetails.PathInTree {
+				fullChannelPath += fmt.Sprintf("%s [%d] -> ", channelNode.ChannelName, channelNode.ChannelIndex)
+			}
+			fullChannelPath = fullChannelPath + fmt.Sprintf("%s [%d]", d.ReceiveDetails.ChannelName, d.ReceiveDetails.ChannelIndex)
+		} else {
+			fullChannelPath = d.ReceiveDetails.ChannelName
+		}
+		byChannelName[fullChannelPath] = byChannelName[fullChannelPath] + 1
 		receivedMsgsMutex.Unlock()
 	}, channelNameToChannel, priorityConfig, 3)
 	if err != nil {
@@ -151,7 +154,7 @@ func main() {
 	fmt.Printf("- Press 'H/NH' to start/stop receiving high priority messages\n")
 	fmt.Printf("- Press 'L/NL' to start/stop receiving low priority messages\n")
 	fmt.Printf("- Press 'U/NU' to start/stop receiving urgent messages\n")
-	// fmt.Printf("- Press 'D/ND' to start/stop presenting receive path in tree\n")
+	fmt.Printf("- Press 'D/ND' to start/stop presenting receive path in tree\n")
 	fmt.Printf("- Press 'w <workers_num>' to update number of workers in the worker pool\n")
 	fmt.Printf("- Press 'load <priority_configuration_file>' to load a different priority configuration\n")
 	fmt.Printf("- Press 'w' or 'workers' to see the number of worker goroutines configured in the worker pool\n")
@@ -160,8 +163,7 @@ func main() {
 	fmt.Printf("To see the results live, run in another terminal window:\ntail -f %s\n\n", demoFilePath)
 
 	for i := 1; i <= len(inputChannels); i++ {
-		channelName := channelsByNum[i]
-		go func(i int, channelName string) {
+		go func(i int) {
 			paused := true
 			closed := false
 			j := 0
@@ -185,17 +187,15 @@ func main() {
 								close(inputChannels[i-1])
 								closed = true
 							}
-						case inputChannels[i-1] <- fmt.Sprintf("%s:message-%d", channelName, j):
+						case inputChannels[i-1] <- fmt.Sprintf("message-%d", j):
 						}
 					} else {
 						time.Sleep(100 * time.Millisecond)
 					}
 				}
 			}
-		}(i, channelName)
+		}(i)
 	}
-
-	var presentDetails atomic.Bool
 
 	tickerCh := time.Tick(5 * time.Second)
 	go func() {
@@ -205,7 +205,11 @@ func main() {
 				return
 			case <-tickerCh:
 				receivedMsgsMutex.Lock()
-				_, _ = f.WriteString(strings.Repeat("=", 80) + "\n")
+				separatorLen := 80
+				if presentDetails.Load() {
+					separatorLen = 100
+				}
+				_, _ = f.WriteString(strings.Repeat("=", separatorLen) + "\n")
 				if receivedMsgs > 0 {
 					_, _ = f.WriteString(fmt.Sprintf("Received %d messages in the last 5 seconds (%.2f messages per second)\n", receivedMsgs, float64(receivedMsgs)/5))
 					var messages []channelStatsMessage
@@ -239,7 +243,7 @@ func main() {
 						}
 					}
 				}
-				_, _ = f.WriteString(strings.Repeat("=", 80) + "\n")
+				_, _ = f.WriteString(strings.Repeat("=", separatorLen) + "\n")
 
 				receivedMsgs = 0
 				byChannelName = make(map[string]int)
@@ -351,8 +355,10 @@ func main() {
 			fmt.Printf(operation + " receiving Urgent messages\n")
 		case "D":
 			presentDetails.Store(true)
+			fmt.Printf("Presenting receive path on\n")
 		case "ND":
 			presentDetails.Store(false)
+			fmt.Printf("Presenting receive path off\n")
 		case "QUIT":
 			fmt.Printf("Waiting for all workers to finish...\n")
 			wp.StopGracefully()

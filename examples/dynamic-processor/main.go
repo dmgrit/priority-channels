@@ -40,11 +40,6 @@ func main() {
 		"Channel B": 2,
 		"Channel C": 3,
 	}
-	channelsByNum := map[int]string{
-		1: "Channel A",
-		2: "Channel B",
-		3: "Channel C",
-	}
 
 	priorityConfig := priority_channels.Configuration{
 		PriorityChannel: &priority_channels.PriorityChannelConfig{
@@ -57,19 +52,14 @@ func main() {
 		},
 	}
 
-	channelNameToChannel := map[string]chan string{
+	channelNameToChannel := map[string]<-chan string{
 		"Channel A": inputChannels[0],
 		"Channel B": inputChannels[1],
 		"Channel C": inputChannels[2],
 	}
-	channelNameToReadOnlyChannel := make(map[string]<-chan string)
-	for name, ch := range channelNameToChannel {
-		channelNameToReadOnlyChannel[name] = ch
-	}
 
 	for i := 1; i <= channelsNum; i++ {
-		channelName := channelsByNum[i]
-		go func(i int, channelName string, ch chan string) {
+		go func(i int) {
 			paused := false
 			closed := false
 			j := 0
@@ -92,28 +82,28 @@ func main() {
 								closed = true
 							}
 							paused = !paused
-						case inputChannels[i-1] <- fmt.Sprintf("%s:image-%s-%d", channelName, imageName, j):
+						case inputChannels[i-1] <- fmt.Sprintf("image-%s-%d", imageName, j):
 						}
 					} else {
 						time.Sleep(100 * time.Millisecond)
 					}
 				}
 			}
-		}(i, channelName, channelNameToChannel[channelName])
+		}(i)
 	}
 
 	receivedMsgs := 0
 	byChannelName := make(map[string]int)
 	var receivedMsgsMutex sync.Mutex
 
-	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, func(msg string) {
+	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, func(d priority_channels.Delivery[string]) {
 		time.Sleep(100 * time.Millisecond)
 		receivedMsgsMutex.Lock()
 		receivedMsgs++
-		channelName := strings.Split(msg, ":")[0]
+		channelName := d.ReceiveDetails.ChannelName
 		byChannelName[channelName] = byChannelName[channelName] + 1
 		receivedMsgsMutex.Unlock()
-	}, channelNameToReadOnlyChannel, priorityConfig, 3)
+	}, channelNameToChannel, priorityConfig, 3)
 	if err != nil {
 		fmt.Printf("failed to initialize dynamic priority processor: %v\n", err)
 		os.Exit(1)
