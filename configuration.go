@@ -67,12 +67,12 @@ type PriorityChannelConfig struct {
 	AutoDisableClosedChannels bool                                 `json:"autoDisableClosedChannels,omitempty"`
 	FrequencyMode             PriorityChannelFrequencyModeConfig   `json:"frequencyMode,omitempty"`
 	FrequencyMethod           PriorityChannelFrequencyMethodConfig `json:"frequencyMethod,omitempty"`
-	ChannelWaitInterval       ChannelWaitIntervalConfig            `json:"channelWaitInterval,omitempty"`
+	ChannelWaitInterval       *ChannelWaitIntervalConfig           `json:"channelWaitInterval,omitempty"`
 }
 
 type ChannelWaitIntervalConfig struct {
-	Unit  ChannelWaitIntervalUnitConfig `json:"unit,omitempty"`
-	Value int                           `json:"value,omitempty"`
+	Unit  ChannelWaitIntervalUnitConfig `json:"unit"`
+	Value int                           `json:"value"`
 }
 
 type ChannelConfig struct {
@@ -109,7 +109,7 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 		}
 		options = append(options, WithFrequencyMethod(frequencyMethod))
 	}
-	if config.ChannelWaitInterval.Unit != "" && config.ChannelWaitInterval.Value > 0 {
+	if config.ChannelWaitInterval != nil && config.ChannelWaitInterval.Unit != "" && config.ChannelWaitInterval.Value > 0 {
 		unitDuration, ok := channelWaitIntervalUnitToTimeDuration[config.ChannelWaitInterval.Unit]
 		if !ok {
 			return nil, fmt.Errorf("unknown channel wait interval unit %s", config.ChannelWaitInterval.Unit)
