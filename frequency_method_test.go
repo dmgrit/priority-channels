@@ -42,10 +42,10 @@ func TestGetFrequencyStrategy(t *testing.T) {
 			expectedError: ErrInvalidFrequencyMethod,
 		},
 		{
-			name:             "NewLevel - Default strategy is by Case Duplication",
+			name:             "NewLevel - Default strategy is Strict Order Across Cycles",
 			level:            levelNew,
 			numChannels:      10,
-			expectedStrategy: frequency_strategies.NewProbabilisticByCaseDuplication(),
+			expectedStrategy: frequency_strategies.NewWithStrictOrderAcrossCycles(),
 		},
 		{
 			name:             "NewLevel - If By Probability method is given it is used",
@@ -55,8 +55,16 @@ func TestGetFrequencyStrategy(t *testing.T) {
 			expectedStrategy: frequency_strategies.NewByProbabilityFromFreqRatios(),
 		},
 		{
-			name:             "NewLevel - If number of channels is greater than recommended - strategy is By Probability",
+			name:             "NewLevel - Default for Probabilistic Mode is By Case Duplication",
 			level:            levelNew,
+			mode:             &probabilisticMode,
+			numChannels:      10,
+			expectedStrategy: frequency_strategies.NewProbabilisticByCaseDuplication(),
+		},
+		{
+			name:             "NewLevel - Probability Mode - If number of channels is greater than recommended - strategy is By Probability",
+			level:            levelNew,
+			mode:             &probabilisticMode,
 			numChannels:      maxRecommendedChannelsForCaseDuplication + 1,
 			expectedStrategy: frequency_strategies.NewByProbabilityFromFreqRatios(),
 		},
@@ -90,10 +98,10 @@ func TestGetFrequencyStrategy(t *testing.T) {
 			expectedStrategy: frequency_strategies.NewWithStrictOrderFully(),
 		},
 		{
-			name:             "CombineLevel - Default strategy is By Probability",
+			name:             "CombineLevel - Default strategy is Strict Order Fully",
 			level:            levelCombine,
 			numChannels:      10,
-			expectedStrategy: frequency_strategies.NewByProbabilityFromFreqRatios(),
+			expectedStrategy: frequency_strategies.NewWithStrictOrderFully(),
 		},
 		{
 			name:             "CombineLevel - Strategy for probabilistic mode is By Probability",

@@ -62,7 +62,7 @@ const (
 )
 
 func getFrequencyStrategy(level priorityChannelLevel, mode *FrequencyMode, method *FrequencyMethod, numChannels int) (PrioritizationStrategy[int], error) {
-	frequencyMode := ProbabilisticMode
+	frequencyMode := StrictOrderMode
 	if mode != nil {
 		frequencyMode = *mode
 	}
