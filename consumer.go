@@ -48,6 +48,23 @@ func NewConsumer[T any](
 }
 
 func (c *PriorityConsumer[T]) Consume() (<-chan Delivery[T], error) {
+	fnGetResult := func(msg T, details ReceiveDetails) Delivery[T] {
+		return Delivery[T]{Msg: msg, ReceiveDetails: details}
+	}
+	return doConsume(c, fnGetResult)
+}
+
+// ConsumeMessages returns a stream of just the message payloads (T only)
+// while Consume returns a stream of Delivery[T] which includes the message payload and the receive details.
+// This is useful when either you don't care about the receive details or they are already included in the message payload.
+func (c *PriorityConsumer[T]) ConsumeMessages() (<-chan T, error) {
+	fnGetResult := func(msg T, details ReceiveDetails) T {
+		return msg
+	}
+	return doConsume(c, fnGetResult)
+}
+
+func doConsume[T any, R any](c *PriorityConsumer[T], fnGetResult func(msg T, details ReceiveDetails) R) (<-chan R, error) {
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
@@ -57,7 +74,7 @@ func (c *PriorityConsumer[T]) Consume() (<-chan Delivery[T], error) {
 		return nil, errors.New("cannot consume after stopping")
 	}
 
-	deliveries := make(chan Delivery[T])
+	deliveries := make(chan R)
 	c.priorityChannelUpdatesC = make(chan *PriorityChannel[T], 1)
 	go func() {
 		defer close(deliveries)
@@ -81,7 +98,7 @@ func (c *PriorityConsumer[T]) Consume() (<-chan Delivery[T], error) {
 					return
 				}
 				select {
-				case deliveries <- Delivery[T]{Msg: msg, ReceiveDetails: receiveDetails}:
+				case deliveries <- fnGetResult(msg, receiveDetails):
 				case <-c.forceShutdownChannel:
 					if c.onMessageDrop != nil {
 						c.onMessageDrop(msg, channelName)
