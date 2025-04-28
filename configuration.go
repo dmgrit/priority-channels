@@ -3,6 +3,7 @@ package priority_channels
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/dmgrit/priority-channels/channels"
 	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
@@ -48,12 +49,30 @@ var frequencyModeConfigToFrequencyMode = map[PriorityChannelFrequencyModeConfig]
 	ProbabilisticModeFrequencyModeConfig: ProbabilisticMode,
 }
 
+type ChannelWaitIntervalUnitConfig string
+
+const (
+	MicrosecondsChannelWaitIntervalUnitConfig ChannelWaitIntervalUnitConfig = "microseconds"
+	MillisecondsChannelWaitIntervalUnitConfig ChannelWaitIntervalUnitConfig = "milliseconds"
+)
+
+var channelWaitIntervalUnitToTimeDuration = map[ChannelWaitIntervalUnitConfig]time.Duration{
+	MicrosecondsChannelWaitIntervalUnitConfig: time.Microsecond,
+	MillisecondsChannelWaitIntervalUnitConfig: time.Millisecond,
+}
+
 type PriorityChannelConfig struct {
 	Method                    PriorityChannelMethodConfig          `json:"method"`
 	Channels                  []ChannelConfig                      `json:"channels"`
 	AutoDisableClosedChannels bool                                 `json:"autoDisableClosedChannels,omitempty"`
 	FrequencyMode             PriorityChannelFrequencyModeConfig   `json:"frequencyMode,omitempty"`
 	FrequencyMethod           PriorityChannelFrequencyMethodConfig `json:"frequencyMethod,omitempty"`
+	ChannelWaitInterval       ChannelWaitIntervalConfig            `json:"channelWaitInterval,omitempty"`
+}
+
+type ChannelWaitIntervalConfig struct {
+	Unit  ChannelWaitIntervalUnitConfig `json:"unit,omitempty"`
+	Value int                           `json:"value,omitempty"`
 }
 
 type ChannelConfig struct {
@@ -89,6 +108,13 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 			return nil, fmt.Errorf("unknown frequency method %s", config.FrequencyMethod)
 		}
 		options = append(options, WithFrequencyMethod(frequencyMethod))
+	}
+	if config.ChannelWaitInterval.Unit != "" && config.ChannelWaitInterval.Value > 0 {
+		unitDuration, ok := channelWaitIntervalUnitToTimeDuration[config.ChannelWaitInterval.Unit]
+		if !ok {
+			return nil, fmt.Errorf("unknown channel wait interval unit %s", config.ChannelWaitInterval.Unit)
+		}
+		options = append(options, ChannelWaitInterval(time.Duration(config.ChannelWaitInterval.Value)*unitDuration))
 	}
 	var isCombinedPriorityChannel bool
 	for _, c := range config.Channels {
