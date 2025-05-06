@@ -13,6 +13,7 @@ import (
 type PriorityChannel[T any] struct {
 	ctx                         context.Context
 	ctxCancel                   context.CancelFunc
+	controlC                    chan controlMessage[T]
 	compositeChannel            selectable.Channel[T]
 	channelReceiveWaitInterval  *time.Duration
 	lock                        *psync.Lock
@@ -36,6 +37,7 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 	return &PriorityChannel[T]{
 		ctx:                         ctx,
 		ctxCancel:                   cancel,
+		controlC:                    make(chan controlMessage[T]),
 		compositeChannel:            compositeChannel,
 		channelReceiveWaitInterval:  pcOptions.channelReceiveWaitInterval,
 		lock:                        l,
@@ -113,12 +115,46 @@ func (pc *PriorityChannel[T]) notifyClosedChannelSubscribers(channelName string,
 			ChannelName: channelName,
 			Details:     toReceiveDetails(channelName, pathInTree),
 			RecoverFunc: func(ch <-chan T) {
-				pc.lock.Lock()
-				defer pc.lock.Unlock()
-				pc.compositeChannel.EnableClosedChannel(ch, pathInTree)
+				// We need to support both following scenarios:
+				// - When no priority_channel.Receive operation is called
+				// - When priority_channel.Receive was called and is blocked holding the lock and waiting for a message
+				// In both cases we should be able to apply the EnableClosedChannel operation
+				// and proceed without waiting indefinitely.
+				select {
+				// First case is for normal flow, or to support situation when no Receive operation is called
+				case pc.lock.Channel() <- struct{}{}:
+					// Lock acquired, now we can enable the closed channel
+					pc.compositeChannel.EnableClosedChannel(ch, pathInTree)
+					<-pc.lock.Channel()
+				// Second case is also for normal flow, or to support situation when Receive has already been called
+				// and is block-waiting while holding the lock
+				case pc.controlC <- controlMessage[T]{
+					messageType: controlMessageTypeEnableClosedChannel,
+					enableClosedChannelsParams: &enableClosedChannelsParams[T]{
+						ch:         ch,
+						pathInTree: pathInTree,
+					}}:
+				}
 			},
 		}
 	}
+}
+
+type controlMessageType int
+
+const (
+	controlMessageTypeUnknown controlMessageType = iota
+	controlMessageTypeEnableClosedChannel
+)
+
+type enableClosedChannelsParams[T any] struct {
+	ch         <-chan T
+	pathInTree []selectable.ChannelNode
+}
+
+type controlMessage[T any] struct {
+	messageType                controlMessageType
+	enableClosedChannelsParams *enableClosedChannelsParams[T]
 }
 
 func (pc *PriorityChannel[T]) Close() {
@@ -197,10 +233,6 @@ func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDe
 				nextNumOfChannelsToProcess++
 				continue
 			}
-		} else if len(channelsSelectCases) <= nextNumOfChannelsToProcess {
-			nextNumOfChannelsToProcess++
-		} else {
-			nextNumOfChannelsToProcess = len(channelsSelectCases) + 1
 		}
 		chosen, recv, recvOk, selectStatus := pc.selectCasesOfNextIteration(
 			pc.ctx,
@@ -211,11 +243,20 @@ func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDe
 			withDefaultCase,
 			pc.channelReceiveWaitInterval)
 		if selectStatus == ReceiveStatusUnknown {
+			if chosen == 2 {
+				pc.processControlMessage(recv)
+				continue
+			}
+			if len(channelsSelectCases) <= nextNumOfChannelsToProcess {
+				nextNumOfChannelsToProcess++
+			} else {
+				nextNumOfChannelsToProcess = len(channelsSelectCases) + 1
+			}
 			continue
 		} else if selectStatus != ReceiveSuccess {
 			return getZero[T](), "", nil, selectStatus
 		}
-		channelIndex := chosen - 2
+		channelIndex := chosen - 3
 		channelName = channelsSelectCases[channelIndex].ChannelName
 		pathInTree := channelsSelectCases[channelIndex].PathInTree
 		if !recvOk {
@@ -225,6 +266,22 @@ func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDe
 		msg := recv.Interface().(T)
 		pc.compositeChannel.UpdateOnCaseSelected(channelsSelectCases[channelIndex].PathInTree, true)
 		return msg, channelName, pathInTree, ReceiveSuccess
+	}
+}
+
+func (pc *PriorityChannel[T]) processControlMessage(recv reflect.Value) {
+	controlMsg, ok := recv.Interface().(controlMessage[T])
+	if !ok {
+		return
+	}
+	switch controlMsg.messageType {
+	case controlMessageTypeEnableClosedChannel:
+		if controlMsg.enableClosedChannelsParams != nil {
+			pc.compositeChannel.EnableClosedChannel(
+				controlMsg.enableClosedChannelsParams.ch,
+				controlMsg.enableClosedChannelsParams.pathInTree)
+		}
+	default:
 	}
 }
 
@@ -250,6 +307,10 @@ func (pc *PriorityChannel[T]) selectCasesOfNextIteration(
 		Dir:  reflect.SelectRecv,
 		Chan: reflect.ValueOf(currRequestContext.Done()),
 	})
+	selectCases = append(selectCases, reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(pc.controlC),
+	})
 	for _, sc := range channelsSelectCases {
 		selectCases = append(selectCases, reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
@@ -268,6 +329,9 @@ func (pc *PriorityChannel[T]) selectCasesOfNextIteration(
 	case 1:
 		// context of the specific request is done
 		return chosen, recv, recvOk, ReceiveContextCanceled
+	case 2:
+		// control message has arrived
+		return chosen, recv, recvOk, ReceiveStatusUnknown
 
 	case len(selectCases) - 1:
 		if !isLastIteration {
