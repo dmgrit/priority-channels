@@ -21,6 +21,8 @@ type PriorityConsumer[T any] struct {
 	isStopped                 bool
 	exitReason                ExitReason
 	exitReasonChannelName     string
+	closedChannelSubscribers  []chan ClosedChannelEvent[T]
+	notifyCloseCh             chan ClosedChannelEvent[T]
 }
 
 type Delivery[T any] struct {
@@ -45,6 +47,31 @@ func NewConsumer[T any](
 		priorityChannelClosedC: make(chan struct{}),
 		forceShutdownChannel:   make(chan struct{}),
 	}, nil
+}
+
+func (c *PriorityConsumer[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+	c.closedChannelSubscribers = append(c.closedChannelSubscribers, ch)
+
+	if c.notifyCloseCh == nil {
+		c.notifyCloseCh = make(chan ClosedChannelEvent[T])
+		go func() {
+			for closedEvent := range c.notifyCloseCh {
+				for _, subscriber := range c.closedChannelSubscribers {
+					subscriber <- ClosedChannelEvent[T]{
+						ChannelName: closedEvent.ChannelName,
+						Details:     closedEvent.Details,
+						RecoverFunc: func(recoverCh <-chan T) {
+							c.channelNameToChannel[closedEvent.ChannelName] = recoverCh
+							closedEvent.RecoverFunc(recoverCh)
+						},
+					}
+				}
+			}
+		}()
+		c.priorityChannel.NotifyClose(c.notifyCloseCh)
+	}
 }
 
 func (c *PriorityConsumer[T]) Consume() (<-chan Delivery[T], error) {
@@ -130,6 +157,9 @@ func (c *PriorityConsumer[T]) UpdatePriorityConfiguration(priorityConfiguration 
 	}
 	if priorityChannel == nil {
 		return errors.New("failed to create priority channel from configuration")
+	}
+	if c.notifyCloseCh != nil {
+		priorityChannel.NotifyClose(c.notifyCloseCh)
 	}
 
 	select {

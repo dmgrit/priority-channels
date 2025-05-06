@@ -23,6 +23,7 @@ type PrioritizationStrategy[W any] interface {
 	NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool)
 	UpdateOnCaseSelected(index int)
 	DisableSelectCase(index int)
+	EnableSelectCase(index int)
 }
 
 func newByStrategy[T any, W any](ctx context.Context,
@@ -151,4 +152,18 @@ func (c *compositeChannelByPrioritization[T, W]) UpdateOnCaseSelected(pathInTree
 	if recvOK {
 		c.strategy.UpdateOnCaseSelected(pathInTree[len(pathInTree)-1].ChannelIndex)
 	}
+}
+
+func (c *compositeChannelByPrioritization[T, W]) EnableClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+	if len(pathInTree) == 0 {
+		return
+	}
+	if len(pathInTree) == 1 {
+		selectedChannel := c.channels[pathInTree[0].ChannelIndex]
+		selectedChannel.EnableClosedChannel(ch, nil)
+		c.strategy.EnableSelectCase(pathInTree[0].ChannelIndex)
+		return
+	}
+	selectedChannel := c.channels[pathInTree[len(pathInTree)-1].ChannelIndex]
+	selectedChannel.EnableClosedChannel(ch, pathInTree[:len(pathInTree)-1])
 }

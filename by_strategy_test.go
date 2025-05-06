@@ -360,3 +360,7 @@ func (s *byFirstDecimalDigit) UpdateOnCaseSelected(index int) {}
 func (s *byFirstDecimalDigit) DisableSelectCase(index int) {
 	// to be implemented
 }
+
+func (s *byFirstDecimalDigit) EnableSelectCase(index int) {
+	// to be implemented
+}

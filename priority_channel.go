@@ -3,6 +3,7 @@ package priority_channels
 import (
 	"context"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
@@ -16,6 +17,8 @@ type PriorityChannel[T any] struct {
 	channelReceiveWaitInterval  *time.Duration
 	lock                        *psync.Lock
 	blockWaitAllChannelsTracker *psync.RepeatingStateTracker
+	notifyMtx                   sync.Mutex
+	closedChannelSubscribers    []chan ClosedChannelEvent[T]
 }
 
 func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.Channel[T], options ...func(*PriorityChannelOptions)) *PriorityChannel[T] {
@@ -89,6 +92,35 @@ func (pc *PriorityChannel[T]) ReceiveWithDefaultCaseEx() (msg T, details Receive
 	return pc.receiveSingleMessage(context.Background(), true)
 }
 
+func (pc *PriorityChannel[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
+	pc.notifyMtx.Lock()
+	defer pc.notifyMtx.Unlock()
+	pc.closedChannelSubscribers = append(pc.closedChannelSubscribers, ch)
+}
+
+type ClosedChannelEvent[T any] struct {
+	ChannelName string
+	Details     ReceiveDetails
+	RecoverFunc func(<-chan T)
+}
+
+func (pc *PriorityChannel[T]) notifyClosedChannelSubscribers(channelName string, pathInTree []selectable.ChannelNode) {
+	pc.notifyMtx.Lock()
+	defer pc.notifyMtx.Unlock()
+
+	for _, subscriber := range pc.closedChannelSubscribers {
+		subscriber <- ClosedChannelEvent[T]{
+			ChannelName: channelName,
+			Details:     toReceiveDetails(channelName, pathInTree),
+			RecoverFunc: func(ch <-chan T) {
+				pc.lock.Lock()
+				defer pc.lock.Unlock()
+				pc.compositeChannel.EnableClosedChannel(ch, pathInTree)
+			},
+		}
+	}
+}
+
 func (pc *PriorityChannel[T]) Close() {
 	pc.ctxCancel()
 }
@@ -104,6 +136,9 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 	msg, channelName, pathInTree, status := pc.doReceiveSingleMessage(ctx, withDefaultCase)
 	for status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed {
 		pc.compositeChannel.UpdateOnCaseSelected(pathInTree, false)
+		if status == ReceiveChannelClosed {
+			pc.notifyClosedChannelSubscribers(channelName, pathInTree)
+		}
 		prevChannelName := channelName
 		msg, channelName, pathInTree, status = pc.doReceiveSingleMessage(ctx, withDefaultCase)
 		if channelName == prevChannelName && (status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed) {

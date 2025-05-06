@@ -67,6 +67,10 @@ func (l *DoublyLinkedList[T]) Len() int {
 	return l.size
 }
 
+func (l *DoublyLinkedList[T]) FirstNode() *ListNode[T] {
+	return l.head
+}
+
 func (l *DoublyLinkedList[T]) LastNode() *ListNode[T] {
 	return l.tail
 }
