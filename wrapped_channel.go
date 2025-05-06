@@ -52,11 +52,10 @@ func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []selectable.Channel
 }
 
 func (c *wrappedChannel[T]) EnableClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
-	if !c.disabled {
-		return
+	if c.disabled {
+		c.disabled = false
 	}
 	c.msgsC = ch
-	c.disabled = false
 }
 
 func (c *wrappedChannel[T]) Validate() error {
