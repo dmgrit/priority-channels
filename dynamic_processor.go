@@ -35,6 +35,10 @@ func NewDynamicPriorityProcessor[T any](
 	return processor, nil
 }
 
+func (c *DynamicPriorityProcessor[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
+	c.consumer.NotifyClose(ch)
+}
+
 func (p *DynamicPriorityProcessor[T]) Start() error {
 	msgs, err := p.consumer.Consume()
 	if err != nil {

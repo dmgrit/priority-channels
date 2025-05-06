@@ -65,3 +65,7 @@ func (oc *overrideCompositeChannelName[T]) NextSelectCases(upto int) ([]selectab
 func (oc *overrideCompositeChannelName[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode, recvOK bool) {
 	oc.channel.UpdateOnCaseSelected(pathInTree, recvOK)
 }
+
+func (oc *overrideCompositeChannelName[T]) EnableClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+	oc.channel.EnableClosedChannel(ch, pathInTree)
+}

@@ -14,7 +14,7 @@ type HighestAlwaysFirst struct {
 	origPriorities             []int
 	sortedPriorities           []sortedToOriginalIndex
 	totalSortedPriorities      int
-	disabledCases              map[int]int
+	disabledCases              map[int]sortedToOriginalIndex
 	frequencyStrategyGenerator FrequencyStrategyGenerator
 }
 
@@ -28,7 +28,7 @@ type samePriorityRange struct {
 	FrequencyStrategy FrequencyStrategy
 	indexToOrigIndex  map[int]int
 	origIndexToIndex  map[int]int
-	disabledCases     map[int]struct{}
+	disabledCases     map[int]int
 }
 
 func newSamePriorityRange(origIndexes []int, strategy FrequencyStrategy) (*samePriorityRange, error) {
@@ -36,7 +36,7 @@ func newSamePriorityRange(origIndexes []int, strategy FrequencyStrategy) (*sameP
 		FrequencyStrategy: strategy,
 		indexToOrigIndex:  make(map[int]int),
 		origIndexToIndex:  make(map[int]int),
-		disabledCases:     make(map[int]struct{}),
+		disabledCases:     make(map[int]int),
 	}
 	weights := make([]int, 0, len(origIndexes))
 	for i, origIndex := range origIndexes {
@@ -82,9 +82,20 @@ func (sp *samePriorityRange) DisableSelectCase(origIndex int) {
 		return
 	}
 	sp.FrequencyStrategy.DisableSelectCase(index)
-	sp.disabledCases[origIndex] = struct{}{}
+	sp.disabledCases[origIndex] = index
 	delete(sp.origIndexToIndex, origIndex)
 	delete(sp.indexToOrigIndex, index)
+}
+
+func (sp *samePriorityRange) EnableSelectCase(origIndex int) {
+	index, ok := sp.disabledCases[origIndex]
+	if !ok {
+		return
+	}
+	delete(sp.disabledCases, origIndex)
+	sp.origIndexToIndex[origIndex] = index
+	sp.indexToOrigIndex[index] = origIndex
+	sp.FrequencyStrategy.EnableSelectCase(index)
 }
 
 func (sp *samePriorityRange) Len() int {
@@ -96,6 +107,7 @@ type FrequencyStrategy interface {
 	NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool)
 	UpdateOnCaseSelected(index int)
 	DisableSelectCase(index int)
+	EnableSelectCase(index int)
 }
 
 func NewByHighestAlwaysFirst(options ...func(opt *HighestAlwaysFirstOptions)) *HighestAlwaysFirst {
@@ -112,7 +124,7 @@ func NewByHighestAlwaysFirst(options ...func(opt *HighestAlwaysFirstOptions)) *H
 		}
 	}
 	return &HighestAlwaysFirst{
-		disabledCases:              make(map[int]int),
+		disabledCases:              make(map[int]sortedToOriginalIndex),
 		frequencyStrategyGenerator: frequencyStrategyGenerator,
 	}
 }
@@ -234,12 +246,12 @@ func (s *HighestAlwaysFirst) DisableSelectCase(index int) {
 	if _, ok := s.disabledCases[index]; ok {
 		return
 	}
-	priority := s.origPriorities[index]
 	sortedIndex := s.getSortedIndexByOriginalIndex(index)
 	if sortedIndex == -1 {
 		// this should not happen
 		return
 	}
+	disabledSortedToOriginalIndex := s.sortedPriorities[sortedIndex]
 	removeSortedPriority := true
 	if spr := s.sortedPriorities[sortedIndex].SamePriorityRange; spr != nil {
 		spr.DisableSelectCase(index)
@@ -251,7 +263,26 @@ func (s *HighestAlwaysFirst) DisableSelectCase(index int) {
 		s.sortedPriorities = append(s.sortedPriorities[:sortedIndex], s.sortedPriorities[sortedIndex+1:]...)
 	}
 	s.totalSortedPriorities--
-	s.disabledCases[index] = priority
+	s.disabledCases[index] = disabledSortedToOriginalIndex
+}
+
+func (s *HighestAlwaysFirst) EnableSelectCase(index int) {
+	sp, ok := s.disabledCases[index]
+	if !ok {
+		return
+	}
+	delete(s.disabledCases, index)
+	i := sort.Search(len(s.sortedPriorities), func(i int) bool {
+		return sp.Priority >= s.sortedPriorities[i].Priority
+	})
+	if s.sortedPriorities[i].Priority != sp.Priority {
+		s.sortedPriorities = append(s.sortedPriorities, sortedToOriginalIndex{})
+		copy(s.sortedPriorities[i+1:], s.sortedPriorities[i:])
+		s.sortedPriorities[i] = sp
+	}
+	if s.sortedPriorities[i].SamePriorityRange != nil {
+		s.sortedPriorities[i].SamePriorityRange.EnableSelectCase(index)
+	}
 }
 
 func (s *HighestAlwaysFirst) getSortedIndexByOriginalIndex(index int) int {

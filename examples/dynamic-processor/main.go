@@ -28,11 +28,13 @@ func main() {
 
 	var inputChannels []chan string
 	var triggerPauseOrCloseChannels []chan bool
+	var triggerRecoverChannels []chan struct{}
 
 	channelsNum := 8
 	for i := 1; i <= channelsNum; i++ {
 		inputChannels = append(inputChannels, make(chan string))
 		triggerPauseOrCloseChannels = append(triggerPauseOrCloseChannels, make(chan bool))
+		triggerRecoverChannels = append(triggerRecoverChannels, make(chan struct{}))
 	}
 
 	channelsOrder := map[string]int{
@@ -43,7 +45,9 @@ func main() {
 
 	priorityConfig := priority_channels.Configuration{
 		PriorityChannel: &priority_channels.PriorityChannelConfig{
-			Method: priority_channels.ByFrequencyRatioMethodConfig,
+			Method:                    priority_channels.ByFrequencyRatioMethodConfig,
+			AutoDisableClosedChannels: true,
+			FrequencyMethod:           priority_channels.ProbabilisticByMultipleRandCallsFrequencyMethodConfig,
 			Channels: []priority_channels.ChannelConfig{
 				{Name: "Channel A", FreqRatio: 6},
 				{Name: "Channel B", FreqRatio: 3},
@@ -71,8 +75,11 @@ func main() {
 					if b && !closed {
 						close(inputChannels[i-1])
 						closed = true
+					} else {
+						paused = !paused
 					}
-					paused = !paused
+				case <-triggerRecoverChannels[i-1]:
+					closed = false
 				default:
 					if !paused && !closed {
 						select {
@@ -80,8 +87,9 @@ func main() {
 							if b && !closed {
 								close(inputChannels[i-1])
 								closed = true
+							} else {
+								paused = !paused
 							}
-							paused = !paused
 						case inputChannels[i-1] <- fmt.Sprintf("image-%s-%d", imageName, j):
 						}
 					} else {
@@ -108,6 +116,15 @@ func main() {
 		fmt.Printf("failed to initialize dynamic priority processor: %v\n", err)
 		os.Exit(1)
 	}
+
+	notifyCloseCh := make(chan priority_channels.ClosedChannelEvent[string])
+	closedChannelNameToRecoveryFn := make(map[string]func(<-chan string))
+	go func() {
+		for closedEvent := range notifyCloseCh {
+			closedChannelNameToRecoveryFn[closedEvent.ChannelName] = closedEvent.RecoverFunc
+		}
+	}()
+	wp.NotifyClose(notifyCloseCh)
 
 	err = wp.Start()
 	if err != nil {
@@ -211,6 +228,31 @@ func main() {
 					triggerPauseOrCloseChannels[2] <- isClose
 					fmt.Printf(operation + " Channel C\n")
 				}
+			case "ra", "rb", "rc":
+				var channelIndex int
+				var channelName string
+				switch words[0] {
+				case "ra":
+					channelIndex = 0
+					channelName = "Channel A"
+				case "rb":
+					channelIndex = 1
+					channelName = "Channel B"
+				case "rc":
+					channelIndex = 2
+					channelName = "Channel C"
+				}
+				recoveryFn, ok := closedChannelNameToRecoveryFn[channelName]
+				if !ok {
+					fmt.Printf("Recovery is not enabled for channel %s\n", channelName)
+					continue
+				}
+				newChannel := make(chan string)
+				inputChannels[channelIndex] = newChannel
+				recoveryFn(newChannel)
+				delete(closedChannelNameToRecoveryFn, channelName)
+				triggerRecoverChannels[channelIndex] <- struct{}{}
+				fmt.Printf("Recovering %s\n", channelName)
 			case "quit":
 				wp.StopGracefully()
 				fmt.Printf("Waiting for all workers to finish...\n")
