@@ -30,7 +30,7 @@ func (c *channelWithWeight[T, W]) NextSelectCases(upto int) ([]SelectCase[T], bo
 
 func (c *channelWithWeight[T, W]) UpdateOnCaseSelected(pathInTree []ChannelNode, recvOK bool) {}
 
-func (c *channelWithWeight[T, W]) EnableClosedChannel(ch <-chan T, pathInTree []ChannelNode) {
+func (c *channelWithWeight[T, W]) RecoverClosedChannel(ch <-chan T, pathInTree []ChannelNode) {
 	c.msgsC = ch
 }
 

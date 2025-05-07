@@ -51,7 +51,7 @@ func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []selectable.Channel
 	}
 }
 
-func (c *wrappedChannel[T]) EnableClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+func (c *wrappedChannel[T]) RecoverClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
 	if c.disabled {
 		c.disabled = false
 	}

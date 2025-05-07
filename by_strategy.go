@@ -154,16 +154,16 @@ func (c *compositeChannelByPrioritization[T, W]) UpdateOnCaseSelected(pathInTree
 	}
 }
 
-func (c *compositeChannelByPrioritization[T, W]) EnableClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+func (c *compositeChannelByPrioritization[T, W]) RecoverClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
 	if len(pathInTree) == 0 {
 		return
 	}
 	if len(pathInTree) == 1 {
 		selectedChannel := c.channels[pathInTree[0].ChannelIndex]
-		selectedChannel.EnableClosedChannel(ch, nil)
+		selectedChannel.RecoverClosedChannel(ch, nil)
 		c.strategy.EnableSelectCase(pathInTree[0].ChannelIndex)
 		return
 	}
 	selectedChannel := c.channels[pathInTree[len(pathInTree)-1].ChannelIndex]
-	selectedChannel.EnableClosedChannel(ch, pathInTree[:len(pathInTree)-1])
+	selectedChannel.RecoverClosedChannel(ch, pathInTree[:len(pathInTree)-1])
 }

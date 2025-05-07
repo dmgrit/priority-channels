@@ -118,19 +118,19 @@ func (pc *PriorityChannel[T]) notifyClosedChannelSubscribers(channelName string,
 				// We need to support both following scenarios:
 				// - When no priority_channel.Receive operation is called
 				// - When priority_channel.Receive was called and is blocked holding the lock and waiting for a message
-				// In both cases we should be able to apply the EnableClosedChannel operation
+				// In both cases we should be able to apply the RecoverClosedChannel operation
 				// and proceed without waiting indefinitely.
 				select {
 				// First case is for normal flow, or to support situation when no Receive operation is called
 				case pc.lock.Channel() <- struct{}{}:
 					// Lock acquired, now we can enable the closed channel
-					pc.compositeChannel.EnableClosedChannel(ch, pathInTree)
+					pc.compositeChannel.RecoverClosedChannel(ch, pathInTree)
 					<-pc.lock.Channel()
 				// Second case is also for normal flow, or to support situation when Receive has already been called
 				// and is block-waiting while holding the lock
 				case pc.controlC <- controlMessage[T]{
-					messageType: controlMessageTypeEnableClosedChannel,
-					enableClosedChannelsParams: &enableClosedChannelsParams[T]{
+					messageType: controlMessageTypeRecoverClosedChannel,
+					recoverClosedChannelParams: &recoverClosedChannelParams[T]{
 						ch:         ch,
 						pathInTree: pathInTree,
 					}}:
@@ -144,17 +144,17 @@ type controlMessageType int
 
 const (
 	controlMessageTypeUnknown controlMessageType = iota
-	controlMessageTypeEnableClosedChannel
+	controlMessageTypeRecoverClosedChannel
 )
 
-type enableClosedChannelsParams[T any] struct {
+type recoverClosedChannelParams[T any] struct {
 	ch         <-chan T
 	pathInTree []selectable.ChannelNode
 }
 
 type controlMessage[T any] struct {
 	messageType                controlMessageType
-	enableClosedChannelsParams *enableClosedChannelsParams[T]
+	recoverClosedChannelParams *recoverClosedChannelParams[T]
 }
 
 func (pc *PriorityChannel[T]) Close() {
@@ -275,11 +275,11 @@ func (pc *PriorityChannel[T]) processControlMessage(recv reflect.Value) {
 		return
 	}
 	switch controlMsg.messageType {
-	case controlMessageTypeEnableClosedChannel:
-		if controlMsg.enableClosedChannelsParams != nil {
-			pc.compositeChannel.EnableClosedChannel(
-				controlMsg.enableClosedChannelsParams.ch,
-				controlMsg.enableClosedChannelsParams.pathInTree)
+	case controlMessageTypeRecoverClosedChannel:
+		if controlMsg.recoverClosedChannelParams != nil {
+			pc.compositeChannel.RecoverClosedChannel(
+				controlMsg.recoverClosedChannelParams.ch,
+				controlMsg.recoverClosedChannelParams.pathInTree)
 		}
 	default:
 	}

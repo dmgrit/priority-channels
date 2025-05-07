@@ -4,7 +4,7 @@ type Channel[T any] interface {
 	ChannelName() string
 	NextSelectCases(upto int) (selectCases []SelectCase[T], isLastIteration bool, closedChannel *ClosedChannelDetails)
 	UpdateOnCaseSelected(pathInTree []ChannelNode, recvOK bool)
-	EnableClosedChannel(ch <-chan T, pathInTree []ChannelNode)
+	RecoverClosedChannel(ch <-chan T, pathInTree []ChannelNode)
 }
 
 type SelectCase[T any] struct {
