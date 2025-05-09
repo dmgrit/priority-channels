@@ -112,3 +112,11 @@ func (s *DynamicByPreconfiguredStrategies) EnableSelectCase(index int) {
 		s.EnableSelectCase(index)
 	}
 }
+
+func (s *DynamicByPreconfiguredStrategies) InitializeCopy(weights []map[string]interface{}) (interface{}, error) {
+	res := NewDynamicByPreconfiguredStrategies(s.strategiesByName, s.currentStrategySelector)
+	if err := res.Initialize(weights); err != nil {
+		return nil, err
+	}
+	return res, nil
+}

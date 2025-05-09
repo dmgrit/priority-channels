@@ -26,6 +26,17 @@ func (w *wrapCompositeChannelWithNameAndWeight[T, W]) Weight() W {
 	return w.weight
 }
 
+func (w *wrapCompositeChannelWithNameAndWeight[T, W]) CloneChannelWithWeight() selectable.ChannelWithWeight[T, W] {
+	return &wrapCompositeChannelWithNameAndWeight[T, W]{
+		overrideCompositeChannelName: w.overrideCompositeChannelName.Clone(),
+		weight:                       w.weight,
+	}
+}
+
+func (w *wrapCompositeChannelWithNameAndWeight[T, W]) Clone() selectable.Channel[T] {
+	return w.CloneChannelWithWeight()
+}
+
 type overrideCompositeChannelName[T any] struct {
 	ctx     context.Context
 	name    string
@@ -68,4 +79,16 @@ func (oc *overrideCompositeChannelName[T]) UpdateOnCaseSelected(pathInTree []sel
 
 func (oc *overrideCompositeChannelName[T]) RecoverClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
 	oc.channel.RecoverClosedChannel(ch, pathInTree)
+}
+
+func (oc *overrideCompositeChannelName[T]) GetInputChannels(m map[string]<-chan T) error {
+	return oc.channel.GetInputChannels(m)
+}
+
+func (oc *overrideCompositeChannelName[T]) Clone() overrideCompositeChannelName[T] {
+	return overrideCompositeChannelName[T]{
+		ctx:     oc.ctx,
+		name:    oc.name,
+		channel: oc.channel.Clone(),
+	}
 }

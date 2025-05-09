@@ -44,7 +44,7 @@ func toSelectableChannelsWithWeight[T any, W any](
 	priorityChannelsWithWeight []PriorityChannelWithWeight[T, W]) []selectable.ChannelWithWeight[T, W] {
 	res := make([]selectable.ChannelWithWeight[T, W], 0, len(priorityChannelsWithWeight))
 	for _, q := range priorityChannelsWithWeight {
-		priorityChannel := q.PriorityChannel()
+		priorityChannel := q.PriorityChannel().clone()
 		res = append(res, asSelectableChannelWithWeight(priorityChannel, q.Name(), q.Weight()))
 	}
 	return res

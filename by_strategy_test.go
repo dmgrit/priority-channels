@@ -364,3 +364,11 @@ func (s *byFirstDecimalDigit) DisableSelectCase(index int) {
 func (s *byFirstDecimalDigit) EnableSelectCase(index int) {
 	// to be implemented
 }
+
+func (s *byFirstDecimalDigit) InitializeCopy(priorities []float64) (interface{}, error) {
+	res := make([]sortedToOriginalIndex, 0, len(priorities))
+	if err := s.Initialize(priorities); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
