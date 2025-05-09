@@ -832,8 +832,8 @@ func TestCombineHighestAlwaysFirstPriorityChannelValidation(t *testing.T) {
 			ctx := context.Background()
 
 			priorityChannels := make([]priority_channels.PriorityChannelWithPriority[string], 0, len(tc.ChannelsWithPriorities))
-			for _, ch := range tc.ChannelsWithPriorities {
-				pch, err := priority_channels.WrapAsPriorityChannel(ctx, "******", make(chan string)) //ch.MsgsC())
+			for i, ch := range tc.ChannelsWithPriorities {
+				pch, err := priority_channels.WrapAsPriorityChannel(ctx, fmt.Sprintf("channel %d", i), make(chan string)) //ch.MsgsC())
 				if err != nil {
 					t.Fatalf("Unexpected error on wrapping as priority channel: %v", err)
 				}

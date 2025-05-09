@@ -185,6 +185,14 @@ func (s *ByProbability) readjustSortedProbabilitySelectionsList(list []probabili
 	list[len(list)-1].AdjustedValue = 1.0
 }
 
+func (s *ByProbability) InitializeCopy(probabilities []float64) (interface{}, error) {
+	res := NewByProbability()
+	if err := res.Initialize(probabilities); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 type ByProbabilityFromFreqRatios struct {
 	*ByProbability
 }
@@ -227,4 +235,12 @@ func (s *ByProbability) ByProbabilityFromFreqRatios(freqRatios []interface{}) er
 		return err
 	}
 	return s.Initialize(freqRatiosInt)
+}
+
+func (s *ByProbabilityFromFreqRatios) InitializeCopy(freqRatios []int) (interface{}, error) {
+	res := NewByProbabilityFromFreqRatios()
+	if err := res.Initialize(freqRatios); err != nil {
+		return nil, err
+	}
+	return res, nil
 }

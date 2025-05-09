@@ -20,6 +20,7 @@ func NewByStrategy[T any, W any](ctx context.Context,
 
 type PrioritizationStrategy[W any] interface {
 	Initialize(weights []W) error
+	InitializeCopy(weights []W) (interface{}, error)
 	NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool)
 	UpdateOnCaseSelected(index int)
 	DisableSelectCase(index int)
@@ -41,7 +42,11 @@ func newByStrategy[T any, W any](ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return newPriorityChannel(ctx, compositeChannel, options...), nil
+	channelNameToChannel := make(map[string]<-chan T)
+	if err := compositeChannel.GetInputChannels(channelNameToChannel); err != nil {
+		return nil, err
+	}
+	return newPriorityChannel(ctx, compositeChannel, channelNameToChannel, options...), nil
 }
 
 func newCompositeChannelByStrategy[T any, W any](name string,
@@ -166,4 +171,29 @@ func (c *compositeChannelByPrioritization[T, W]) RecoverClosedChannel(ch <-chan 
 	}
 	selectedChannel := c.channels[pathInTree[len(pathInTree)-1].ChannelIndex]
 	selectedChannel.RecoverClosedChannel(ch, pathInTree[:len(pathInTree)-1])
+}
+
+func (c *compositeChannelByPrioritization[T, W]) GetInputChannels(m map[string]<-chan T) error {
+	for _, ch := range c.channels {
+		if err := ch.GetInputChannels(m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *compositeChannelByPrioritization[T, W]) Clone() selectable.Channel[T] {
+	res := &compositeChannelByPrioritization[T, W]{
+		channelName:               c.channelName,
+		autoDisableClosedChannels: c.autoDisableClosedChannels,
+		channels:                  make([]selectable.ChannelWithWeight[T, W], 0, len(c.channels)),
+	}
+	var weights []W
+	for _, ch := range c.channels {
+		res.channels = append(res.channels, ch.CloneChannelWithWeight())
+		weights = append(weights, ch.Weight())
+	}
+	strategyInterface, _ := c.strategy.InitializeCopy(weights)
+	res.strategy = strategyInterface.(PrioritizationStrategy[W])
+	return res
 }

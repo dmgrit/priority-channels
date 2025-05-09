@@ -13,16 +13,17 @@ import (
 type PriorityChannel[T any] struct {
 	ctx                         context.Context
 	ctxCancel                   context.CancelFunc
-	controlC                    chan controlMessage[T]
+	controlC                    chan func()
 	compositeChannel            selectable.Channel[T]
 	channelReceiveWaitInterval  *time.Duration
 	lock                        *psync.Lock
 	blockWaitAllChannelsTracker *psync.RepeatingStateTracker
 	notifyMtx                   sync.Mutex
 	closedChannelSubscribers    []chan ClosedChannelEvent[T]
+	channelNameToChannel        map[string]<-chan T
 }
 
-func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.Channel[T], options ...func(*PriorityChannelOptions)) *PriorityChannel[T] {
+func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.Channel[T], channelNameToChannel map[string]<-chan T, options ...func(*PriorityChannelOptions)) *PriorityChannel[T] {
 	pcOptions := &PriorityChannelOptions{}
 	for _, option := range options {
 		option(pcOptions)
@@ -37,11 +38,12 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 	return &PriorityChannel[T]{
 		ctx:                         ctx,
 		ctxCancel:                   cancel,
-		controlC:                    make(chan controlMessage[T]),
+		controlC:                    make(chan func()),
 		compositeChannel:            compositeChannel,
 		channelReceiveWaitInterval:  pcOptions.channelReceiveWaitInterval,
 		lock:                        l,
 		blockWaitAllChannelsTracker: blockWaitAllChannelsTracker,
+		channelNameToChannel:        channelNameToChannel,
 	}
 }
 
@@ -115,46 +117,71 @@ func (pc *PriorityChannel[T]) notifyClosedChannelSubscribers(channelName string,
 			ChannelName: channelName,
 			Details:     toReceiveDetails(channelName, pathInTree),
 			RecoverFunc: func(ch <-chan T) {
-				// We need to support both following scenarios:
-				// - When no priority_channel.Receive operation is called
-				// - When priority_channel.Receive was called and is blocked holding the lock and waiting for a message
-				// In both cases we should be able to apply the RecoverClosedChannel operation
-				// and proceed without waiting indefinitely.
-				select {
-				// First case is for normal flow, or to support situation when no Receive operation is called
-				case pc.lock.Channel() <- struct{}{}:
-					// Lock acquired, now we can enable the closed channel
+				pc.applyControlOperation(func() {
 					pc.compositeChannel.RecoverClosedChannel(ch, pathInTree)
-					<-pc.lock.Channel()
-				// Second case is also for normal flow, or to support situation when Receive has already been called
-				// and is block-waiting while holding the lock
-				case pc.controlC <- controlMessage[T]{
-					messageType: controlMessageTypeRecoverClosedChannel,
-					recoverClosedChannelParams: &recoverClosedChannelParams[T]{
-						ch:         ch,
-						pathInTree: pathInTree,
-					}}:
-				}
+					pc.channelNameToChannel[channelName] = ch
+				})
 			},
 		}
 	}
 }
 
-type controlMessageType int
-
-const (
-	controlMessageTypeUnknown controlMessageType = iota
-	controlMessageTypeRecoverClosedChannel
-)
-
-type recoverClosedChannelParams[T any] struct {
-	ch         <-chan T
-	pathInTree []selectable.ChannelNode
+func (pc *PriorityChannel[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration) error {
+	priorityChannel, err := NewFromConfiguration(pc.ctx, priorityConfiguration, pc.channelNameToChannel)
+	if err != nil {
+		return err
+	}
+	pc.applyControlOperation(func() {
+		pc.doUpdatePriorityConfiguration(priorityChannel)
+	})
+	return nil
 }
 
-type controlMessage[T any] struct {
-	messageType                controlMessageType
-	recoverClosedChannelParams *recoverClosedChannelParams[T]
+func (pc *PriorityChannel[T]) doUpdatePriorityConfiguration(priorityChannel *PriorityChannel[T]) {
+	pc.compositeChannel = priorityChannel.compositeChannel
+	pc.channelReceiveWaitInterval = priorityChannel.channelReceiveWaitInterval
+}
+
+func (pc *PriorityChannel[T]) clone() *PriorityChannel[T] {
+	resC := make(chan *PriorityChannel[T])
+	go pc.applyControlOperation(func() {
+		resC <- pc.doClone()
+	})
+	res := <-resC
+	return res
+}
+
+func (pc *PriorityChannel[T]) doClone() *PriorityChannel[T] {
+	channelNameToChannel := make(map[string]<-chan T)
+	for channelName, ch := range pc.channelNameToChannel {
+		channelNameToChannel[channelName] = ch
+	}
+	res := newPriorityChannel(context.Background(), pc.compositeChannel.Clone(), channelNameToChannel)
+	res.ctx = pc.ctx
+	res.ctxCancel = pc.ctxCancel
+	if pc.channelReceiveWaitInterval != nil {
+		channelReceiveWaitInterval := *pc.channelReceiveWaitInterval
+		res.channelReceiveWaitInterval = &channelReceiveWaitInterval
+	}
+	return res
+}
+
+func (pc *PriorityChannel[T]) applyControlOperation(controlOperation func()) {
+	// We need to support both following scenarios:
+	// - When no priority_channel.Receive operation is called
+	// - When priority_channel.Receive was called and is blocked holding the lock and waiting for a message
+	// In both cases we should be able to apply the control operation
+	// and proceed without waiting indefinitely.
+	select {
+	// First case is for normal flow, or to support situation when no Receive operation is called
+	case pc.lock.Channel() <- struct{}{}:
+		// Lock acquired, now we can enable the closed channel
+		controlOperation()
+		<-pc.lock.Channel()
+	// Second case is also for normal flow, or to support situation when Receive has already been called
+	// and is block-waiting while holding the lock
+	case pc.controlC <- controlOperation:
+	}
 }
 
 func (pc *PriorityChannel[T]) Close() {
@@ -270,19 +297,11 @@ func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDe
 }
 
 func (pc *PriorityChannel[T]) processControlMessage(recv reflect.Value) {
-	controlMsg, ok := recv.Interface().(controlMessage[T])
+	controlOperation, ok := recv.Interface().(func())
 	if !ok {
 		return
 	}
-	switch controlMsg.messageType {
-	case controlMessageTypeRecoverClosedChannel:
-		if controlMsg.recoverClosedChannelParams != nil {
-			pc.compositeChannel.RecoverClosedChannel(
-				controlMsg.recoverClosedChannelParams.ch,
-				controlMsg.recoverClosedChannelParams.pathInTree)
-		}
-	default:
-	}
+	controlOperation()
 }
 
 func (pc *PriorityChannel[T]) selectCasesOfNextIteration(

@@ -119,6 +119,14 @@ func (s *WithStrictOrderAcrossCycles) EnableSelectCase(index int) {
 	s.addBucketToLevel(bucketNode, firstLevel)
 }
 
+func (s *WithStrictOrderAcrossCycles) InitializeCopy(freqRatios []int) (interface{}, error) {
+	res := NewWithStrictOrderAcrossCycles()
+	if err := res.Initialize(freqRatios); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (s *WithStrictOrderAcrossCycles) updateStateOnReceivingMessageToBucket(bucket *collections.ListNode[*aPriorityBucket]) {
 	b := bucket.Value()
 	b.Value++
