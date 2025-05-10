@@ -21,7 +21,7 @@ type PriorityChannel[T any] struct {
 	notifyMtx                   sync.Mutex
 	closedChannelSubscribers    []chan ClosedChannelEvent[T]
 	channelNameToChannel        map[string]<-chan T
-	closedInputChannels         map[string]closedChannelState
+	closedInputChannels         map[string]*closedChannelState
 }
 
 type closedChannelState struct {
@@ -50,7 +50,7 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 		lock:                        l,
 		blockWaitAllChannelsTracker: blockWaitAllChannelsTracker,
 		channelNameToChannel:        channelNameToChannel,
-		closedInputChannels:         make(map[string]closedChannelState),
+		closedInputChannels:         make(map[string]*closedChannelState),
 	}
 }
 
@@ -115,6 +115,8 @@ func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName stri
 		return true
 	}
 	select {
+	case <-pc.ctx.Done():
+		return false
 	case <-ctx.Done():
 		return false
 	case <-state.recoveredC:
@@ -170,6 +172,23 @@ func (pc *PriorityChannel[T]) UpdatePriorityConfiguration(priorityConfiguration 
 func (pc *PriorityChannel[T]) doUpdatePriorityConfiguration(priorityChannel *PriorityChannel[T]) {
 	pc.compositeChannel = priorityChannel.compositeChannel
 	pc.channelReceiveWaitInterval = priorityChannel.channelReceiveWaitInterval
+
+	if len(pc.closedInputChannels) > 0 {
+		newChannelPaths := make(map[string][]selectable.ChannelNode)
+		for channelName := range pc.closedInputChannels {
+			newChannelPaths[channelName] = nil
+		}
+		pc.compositeChannel.GetChannelsPaths(newChannelPaths, nil)
+		for channelName := range pc.closedInputChannels {
+			channelPath := newChannelPaths[channelName]
+			if channelPath == nil {
+				continue
+			}
+			pathInTree := fromReceiveDetailsOrder(channelPath)
+			pc.closedInputChannels[channelName].pathInTree = pathInTree
+			pc.compositeChannel.UpdateOnCaseSelected(pathInTree, false)
+		}
+	}
 }
 
 func (pc *PriorityChannel[T]) clone() *PriorityChannel[T] {
@@ -230,7 +249,7 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 	for status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed {
 		pc.compositeChannel.UpdateOnCaseSelected(pathInTree, false)
 		if status == ReceiveChannelClosed {
-			pc.closedInputChannels[channelName] = closedChannelState{
+			pc.closedInputChannels[channelName] = &closedChannelState{
 				pathInTree: pathInTree,
 				recoveredC: make(chan struct{}),
 			}
@@ -266,6 +285,33 @@ func toReceiveDetails(channelName string, pathInTree []selectable.ChannelNode) R
 			})
 		}
 	}
+	return res
+}
+
+func fromReceiveDetailsOrder(pathInTree []selectable.ChannelNode) []selectable.ChannelNode {
+	if len(pathInTree) == 0 {
+		return nil
+	}
+
+	// Receive Details Order:
+	// Regular Processing - Index 1
+	// Channel B - Index 0
+
+	// Path In Tree Order
+	// Regular Processing - Index 0
+	// "" - Index 1
+
+	var res []selectable.ChannelNode
+	for i := len(pathInTree) - 1; i >= 1; i-- {
+		res = append(res, selectable.ChannelNode{
+			ChannelName:  pathInTree[i-1].ChannelName,
+			ChannelIndex: pathInTree[i].ChannelIndex,
+		})
+	}
+	res = append(res, selectable.ChannelNode{
+		ChannelName:  "",
+		ChannelIndex: pathInTree[0].ChannelIndex,
+	})
 	return res
 }
 

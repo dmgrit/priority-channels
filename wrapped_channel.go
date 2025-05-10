@@ -69,6 +69,13 @@ func (c *wrappedChannel[T]) GetInputChannels(m map[string]<-chan T) error {
 	return nil
 }
 
+func (c *wrappedChannel[T]) GetChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
+	if _, ok := m[c.channelName]; !ok {
+		return
+	}
+	m[c.channelName] = currPathInTree
+}
+
 func (c *wrappedChannel[T]) Clone() selectable.Channel[T] {
 	return &wrappedChannel[T]{
 		ctx:                        c.ctx,

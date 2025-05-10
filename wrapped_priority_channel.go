@@ -85,6 +85,10 @@ func (oc *overrideCompositeChannelName[T]) GetInputChannels(m map[string]<-chan 
 	return oc.channel.GetInputChannels(m)
 }
 
+func (oc *overrideCompositeChannelName[T]) GetChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
+	oc.channel.GetChannelsPaths(m, currPathInTree)
+}
+
 func (oc *overrideCompositeChannelName[T]) Clone() overrideCompositeChannelName[T] {
 	return overrideCompositeChannelName[T]{
 		ctx:     oc.ctx,

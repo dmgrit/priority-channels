@@ -44,6 +44,13 @@ func (c *channelWithWeight[T, W]) GetInputChannels(m map[string]<-chan T) error 
 	return nil
 }
 
+func (c *channelWithWeight[T, W]) GetChannelsPaths(m map[string][]ChannelNode, currPathInTree []ChannelNode) {
+	if _, ok := m[c.channelName]; !ok {
+		return
+	}
+	m[c.channelName] = currPathInTree
+}
+
 func (c *channelWithWeight[T, W]) Clone() Channel[T] {
 	return c.CloneChannelWithWeight()
 }
