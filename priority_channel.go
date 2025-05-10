@@ -21,6 +21,12 @@ type PriorityChannel[T any] struct {
 	notifyMtx                   sync.Mutex
 	closedChannelSubscribers    []chan ClosedChannelEvent[T]
 	channelNameToChannel        map[string]<-chan T
+	closedInputChannels         map[string]closedChannelState
+}
+
+type closedChannelState struct {
+	pathInTree []selectable.ChannelNode
+	recoveredC chan struct{}
 }
 
 func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.Channel[T], channelNameToChannel map[string]<-chan T, options ...func(*PriorityChannelOptions)) *PriorityChannel[T] {
@@ -44,6 +50,7 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 		lock:                        l,
 		blockWaitAllChannelsTracker: blockWaitAllChannelsTracker,
 		channelNameToChannel:        channelNameToChannel,
+		closedInputChannels:         make(map[string]closedChannelState),
 	}
 }
 
@@ -102,6 +109,19 @@ func (pc *PriorityChannel[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
 	pc.closedChannelSubscribers = append(pc.closedChannelSubscribers, ch)
 }
 
+func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName string) bool {
+	state, ok := pc.closedInputChannels[channelName]
+	if !ok {
+		return true
+	}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-state.recoveredC:
+		return true
+	}
+}
+
 type ClosedChannelEvent[T any] struct {
 	ChannelName string
 	Details     ReceiveDetails
@@ -117,13 +137,23 @@ func (pc *PriorityChannel[T]) notifyClosedChannelSubscribers(channelName string,
 			ChannelName: channelName,
 			Details:     toReceiveDetails(channelName, pathInTree),
 			RecoverFunc: func(ch <-chan T) {
-				pc.applyControlOperation(func() {
-					pc.compositeChannel.RecoverClosedChannel(ch, pathInTree)
-					pc.channelNameToChannel[channelName] = ch
-				})
+				pc.recoverClosedInputChannel(channelName, ch)
 			},
 		}
 	}
+}
+
+func (pc *PriorityChannel[T]) recoverClosedInputChannel(channelName string, ch <-chan T) {
+	state, ok := pc.closedInputChannels[channelName]
+	if !ok {
+		return
+	}
+	pc.applyControlOperation(func() {
+		pc.compositeChannel.RecoverClosedChannel(ch, state.pathInTree)
+		pc.channelNameToChannel[channelName] = ch
+		delete(pc.closedInputChannels, channelName)
+		close(state.recoveredC)
+	})
 }
 
 func (pc *PriorityChannel[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration) error {
@@ -200,6 +230,10 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 	for status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed {
 		pc.compositeChannel.UpdateOnCaseSelected(pathInTree, false)
 		if status == ReceiveChannelClosed {
+			pc.closedInputChannels[channelName] = closedChannelState{
+				pathInTree: pathInTree,
+				recoveredC: make(chan struct{}),
+			}
 			pc.notifyClosedChannelSubscribers(channelName, pathInTree)
 		}
 		prevChannelName := channelName

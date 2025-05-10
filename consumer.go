@@ -120,7 +120,31 @@ func doConsume[T any, R any](c *PriorityConsumer[T], fnGetResult func(msg T, det
 				// but on processing the message we pass the priority-channel context
 				msg, receiveDetails, status := c.priorityChannel.ReceiveWithContextEx(context.Background())
 				channelName := receiveDetails.ChannelName
-				if status != ReceiveSuccess {
+				if status == ReceiveChannelClosed {
+					c.setPaused(status.ExitReason(), channelName)
+					recoverC := make(chan struct{})
+					awaitRecoverCtx, awaitRecoverCancel := context.WithCancel(context.Background())
+					go func() {
+						if c.priorityChannel.AwaitRecover(awaitRecoverCtx, channelName) {
+							close(recoverC)
+						}
+					}()
+					select {
+					case <-recoverC:
+						c.setResumed()
+					case priorityChannel, ok := <-c.priorityChannelUpdatesC:
+						awaitRecoverCancel()
+						c.priorityChannel.Close()
+						if !ok {
+							c.setClosed(PriorityChannelClosed, "")
+							return
+						}
+						c.priorityChannel = priorityChannel
+						c.setResumed()
+					}
+					awaitRecoverCancel()
+					continue
+				} else if status != ReceiveSuccess {
 					c.setClosed(status.ExitReason(), channelName)
 					return
 				}
@@ -209,10 +233,23 @@ func (c *PriorityConsumer[T]) Status() (stopped bool, reason ExitReason, channel
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
-	if c.isStopped {
-		return true, c.exitReason, c.exitReasonChannelName
-	}
-	return false, UnknownExitReason, ""
+	return c.isStopped, c.exitReason, c.exitReasonChannelName
+}
+
+func (c *PriorityConsumer[T]) setPaused(exitReason ExitReason, exitReasonChannelName string) {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+
+	c.exitReason = exitReason
+	c.exitReasonChannelName = exitReasonChannelName
+}
+
+func (c *PriorityConsumer[T]) setResumed() {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+
+	c.exitReason = UnknownExitReason
+	c.exitReasonChannelName = ""
 }
 
 func (c *PriorityConsumer[T]) setClosed(exitReason ExitReason, exitReasonChannelName string) {
