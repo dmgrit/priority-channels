@@ -182,6 +182,15 @@ func (c *compositeChannelByPrioritization[T, W]) GetInputChannels(m map[string]<
 	return nil
 }
 
+func (c *compositeChannelByPrioritization[T, W]) GetChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
+	for i, ch := range c.channels {
+		ch.GetChannelsPaths(m, append(currPathInTree, selectable.ChannelNode{
+			ChannelName:  ch.ChannelName(),
+			ChannelIndex: i,
+		}))
+	}
+}
+
 func (c *compositeChannelByPrioritization[T, W]) Clone() selectable.Channel[T] {
 	res := &compositeChannelByPrioritization[T, W]{
 		channelName:               c.channelName,
