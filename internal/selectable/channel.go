@@ -6,6 +6,7 @@ type Channel[T any] interface {
 	UpdateOnCaseSelected(pathInTree []ChannelNode, recvOK bool)
 	RecoverClosedChannel(ch <-chan T, pathInTree []ChannelNode)
 	GetInputChannels(map[string]<-chan T) error
+	GetChannelsPaths(result map[string][]ChannelNode, currPathInTree []ChannelNode)
 	Clone() Channel[T]
 }
 
