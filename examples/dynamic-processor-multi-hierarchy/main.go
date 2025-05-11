@@ -112,7 +112,7 @@ func main() {
 	var receivedMsgsMutex sync.Mutex
 	var presentDetails atomic.Bool
 
-	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, func(d priority_channels.Delivery[string]) {
+	processFn := func(d priority_channels.Delivery[string]) {
 		time.Sleep(100 * time.Millisecond)
 		receivedMsgsMutex.Lock()
 		receivedMsgs++
@@ -127,13 +127,14 @@ func main() {
 		}
 		byChannelName[fullChannelPath] = byChannelName[fullChannelPath] + 1
 		receivedMsgsMutex.Unlock()
-	}, channelNameToChannel, priorityConfig, 3)
+	}
+	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, channelNameToChannel, priorityConfig, 3)
 	if err != nil {
 		fmt.Printf("failed to initialize dynamic priority processor: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = wp.Start()
+	err = wp.Process(processFn)
 	if err != nil {
 		fmt.Printf("failed to start processing messages: %v\n", err)
 		os.Exit(1)
@@ -361,7 +362,7 @@ func main() {
 			fmt.Printf("Presenting receive path off\n")
 		case "QUIT":
 			fmt.Printf("Waiting for all workers to finish...\n")
-			wp.StopGracefully()
+			wp.Stop()
 			<-wp.Done()
 			fmt.Printf("Processing finished\n")
 			return

@@ -104,14 +104,15 @@ func main() {
 	byChannelName := make(map[string]int)
 	var receivedMsgsMutex sync.Mutex
 
-	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, func(d priority_channels.Delivery[string]) {
+	processFn := func(d priority_channels.Delivery[string]) {
 		time.Sleep(100 * time.Millisecond)
 		receivedMsgsMutex.Lock()
 		receivedMsgs++
 		channelName := d.ReceiveDetails.ChannelName
 		byChannelName[channelName] = byChannelName[channelName] + 1
 		receivedMsgsMutex.Unlock()
-	}, channelNameToChannel, priorityConfig, 3)
+	}
+	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, channelNameToChannel, priorityConfig, 3)
 	if err != nil {
 		fmt.Printf("failed to initialize dynamic priority processor: %v\n", err)
 		os.Exit(1)
@@ -126,7 +127,7 @@ func main() {
 	}()
 	wp.NotifyClose(notifyCloseCh)
 
-	err = wp.Start()
+	err = wp.Process(processFn)
 	if err != nil {
 		fmt.Printf("failed to start processing messages: %v\n", err)
 		os.Exit(1)
@@ -254,7 +255,7 @@ func main() {
 				triggerRecoverChannels[channelIndex] <- struct{}{}
 				fmt.Printf("Recovering %s\n", channelName)
 			case "quit":
-				wp.StopGracefully()
+				wp.Stop()
 				fmt.Printf("Waiting for all workers to finish...\n")
 				<-wp.Done()
 				fmt.Printf("Processing finished\n")
