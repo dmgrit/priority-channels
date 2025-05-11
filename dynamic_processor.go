@@ -2,61 +2,52 @@ package priority_channels
 
 import (
 	"context"
-	"github.com/dmgrit/priority-channels/workerpool"
 )
 
 type DynamicPriorityProcessor[T any] struct {
-	consumer   *PriorityConsumer[T]
-	workerPool *workerpool.DynamicWorkerPool[Delivery[T]]
+	priorityChannel *PriorityChannel[T]
+	workerPool      *DynamicWorkerPool[T]
 }
 
 func NewDynamicPriorityProcessor[T any](
 	ctx context.Context,
-	processFn func(Delivery[T]),
 	channelNameToChannel map[string]<-chan T,
 	priorityConfiguration Configuration,
 	workersNum int) (*DynamicPriorityProcessor[T], error) {
-	consumer, err := NewConsumer(ctx, channelNameToChannel, priorityConfiguration)
+	priorityChannel, err := NewFromConfiguration(ctx, priorityConfiguration, channelNameToChannel)
 	if err != nil {
 		return nil, err
 	}
 	// We're closing the worker pool by having the consumer close its delivery channel.
 	// We want the pool to continue processing messages until the consumer explicitly signals that it has stopped.
 	// That's why we don't pass the same context used to cancel the consumer to the pool.
-	workerPool, err := workerpool.NewDynamicWorkerPool(context.Background(), processFn, workersNum)
+	workerPool, err := NewDynamicWorkerPool(context.Background(), priorityChannel, workersNum)
 	if err != nil {
 		return nil, err
 	}
 
 	processor := &DynamicPriorityProcessor[T]{
-		consumer:   consumer,
-		workerPool: workerPool,
+		priorityChannel: priorityChannel,
+		workerPool:      workerPool,
 	}
 	return processor, nil
 }
 
-func (c *DynamicPriorityProcessor[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
-	c.consumer.NotifyClose(ch)
+func (p *DynamicPriorityProcessor[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
+	p.priorityChannel.NotifyClose(ch)
 }
 
-func (p *DynamicPriorityProcessor[T]) Start() error {
-	msgs, err := p.consumer.Consume()
-	if err != nil {
-		return err
-	}
-	err = p.workerPool.Process(msgs)
-	if err != nil {
-		return err
-	}
-	return nil
+func (p *DynamicPriorityProcessor[T]) Process(processFn func(Delivery[T])) error {
+	return p.workerPool.Process(processFn)
 }
 
-func (p *DynamicPriorityProcessor[T]) StopGracefully() {
-	p.consumer.StopGracefully()
+func (p *DynamicPriorityProcessor[T]) ProcessMessages(processFn func(T)) error {
+	return p.workerPool.ProcessMessages(processFn)
 }
 
-func (p *DynamicPriorityProcessor[T]) StopImmediately(onMessageDrop func(msg T, channelName string)) {
-	p.consumer.StopImmediately(onMessageDrop)
+func (p *DynamicPriorityProcessor[T]) Stop() {
+	p.priorityChannel.Close()
+	p.workerPool.Shutdown()
 }
 
 func (p *DynamicPriorityProcessor[T]) Done() <-chan struct{} {
@@ -64,7 +55,7 @@ func (p *DynamicPriorityProcessor[T]) Done() <-chan struct{} {
 }
 
 func (p *DynamicPriorityProcessor[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration) error {
-	return p.consumer.UpdatePriorityConfiguration(priorityConfiguration)
+	return p.priorityChannel.UpdatePriorityConfiguration(priorityConfiguration)
 }
 
 func (p *DynamicPriorityProcessor[T]) WorkersNum() int {
@@ -80,10 +71,5 @@ func (p *DynamicPriorityProcessor[T]) ActiveWorkersNum() int {
 }
 
 func (p *DynamicPriorityProcessor[T]) Status() (stopped bool, reason ExitReason, channelName string) {
-	select {
-	case <-p.workerPool.Done():
-		return p.consumer.Status()
-	default:
-		return false, UnknownExitReason, ""
-	}
+	return p.workerPool.Status()
 }
