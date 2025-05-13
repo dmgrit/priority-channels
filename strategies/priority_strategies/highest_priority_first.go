@@ -275,7 +275,7 @@ func (s *HighestAlwaysFirst) EnableSelectCase(index int) {
 	i := sort.Search(len(s.sortedPriorities), func(i int) bool {
 		return sp.Priority >= s.sortedPriorities[i].Priority
 	})
-	if s.sortedPriorities[i].Priority != sp.Priority {
+	if i == len(s.sortedPriorities) || s.sortedPriorities[i].Priority != sp.Priority {
 		s.sortedPriorities = append(s.sortedPriorities, sortedToOriginalIndex{})
 		copy(s.sortedPriorities[i+1:], s.sortedPriorities[i:])
 		s.sortedPriorities[i] = sp
