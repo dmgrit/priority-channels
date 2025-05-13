@@ -17,6 +17,7 @@
               "freqRatio": 9,
               "priorityChannel": {
                 "method": "by-frequency-ratio",
+                "autoDisableClosedChannels": true,
                 "channels": [
                   {
                     "name": "Customer A - High Priority",
@@ -34,6 +35,7 @@
               "freqRatio": 1,
               "priorityChannel": {
                 "method": "by-frequency-ratio",
+                "autoDisableClosedChannels": true,
                 "channels": [
                   {
                     "name": "Customer B - High Priority",

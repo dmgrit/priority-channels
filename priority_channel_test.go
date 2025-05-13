@@ -24,7 +24,7 @@ func TestReceiveWithDefaultCaseSynchronized(t *testing.T) {
 		channels.NewChannelWithFreqRatio("Channel B", inputChannels[1], 2),
 	}
 
-	ch, err := priority_channels.NewByFrequencyRatio(ctx, channelsWithFreqRatio, priority_channels.Synchronized(true))
+	ch, err := priority_channels.NewByFrequencyRatio(ctx, channelsWithFreqRatio)
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}

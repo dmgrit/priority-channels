@@ -58,6 +58,10 @@ func (p *DynamicPriorityProcessor[T]) UpdatePriorityConfiguration(priorityConfig
 	return p.priorityChannel.UpdatePriorityConfiguration(priorityConfiguration)
 }
 
+func (p *DynamicPriorityProcessor[T]) RecoverClosedInputChannel(channelName string, ch <-chan T) {
+	p.priorityChannel.RecoverClosedInputChannel(channelName, ch)
+}
+
 func (p *DynamicPriorityProcessor[T]) WorkersNum() int {
 	return p.workerPool.WorkersNum()
 }
