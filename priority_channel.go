@@ -35,20 +35,15 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 		option(pcOptions)
 	}
 	ctx, cancel := context.WithCancel(ctx)
-	var l *psync.Lock
-	var blockWaitAllChannelsTracker *psync.RepeatingStateTracker
-	if pcOptions.isSynchronized == nil || *pcOptions.isSynchronized {
-		l = psync.NewLock()
-		blockWaitAllChannelsTracker = psync.NewRepeatingStateTracker()
-	}
+
 	return &PriorityChannel[T]{
 		ctx:                         ctx,
 		ctxCancel:                   cancel,
 		controlC:                    make(chan func()),
 		compositeChannel:            compositeChannel,
 		channelReceiveWaitInterval:  pcOptions.channelReceiveWaitInterval,
-		lock:                        l,
-		blockWaitAllChannelsTracker: blockWaitAllChannelsTracker,
+		lock:                        psync.NewLock(),
+		blockWaitAllChannelsTracker: psync.NewRepeatingStateTracker(),
 		channelNameToChannel:        channelNameToChannel,
 		closedInputChannels:         make(map[string]*closedChannelState),
 	}
@@ -60,10 +55,8 @@ func (pc *PriorityChannel[T]) Receive() (msg T, channelName string, ok bool) {
 }
 
 func (pc *PriorityChannel[T]) ReceiveEx() (msg T, details ReceiveDetails, ok bool) {
-	if pc.lock != nil {
-		pc.lock.Lock()
-		defer pc.lock.Unlock()
-	}
+	pc.lock.Lock()
+	defer pc.lock.Unlock()
 	msg, details, status := pc.receiveSingleMessage(context.Background(), false)
 	if status != ReceiveSuccess {
 		return getZero[T](), details, false
@@ -77,13 +70,11 @@ func (pc *PriorityChannel[T]) ReceiveWithContext(ctx context.Context) (msg T, ch
 }
 
 func (pc *PriorityChannel[T]) ReceiveWithContextEx(ctx context.Context) (msg T, details ReceiveDetails, status ReceiveStatus) {
-	if pc.lock != nil {
-		gotLock := pc.lock.TryLockWithContext(ctx)
-		if !gotLock {
-			return getZero[T](), ReceiveDetails{}, ReceiveContextCanceled
-		}
-		defer pc.lock.Unlock()
+	gotLock := pc.lock.TryLockWithContext(ctx)
+	if !gotLock {
+		return getZero[T](), ReceiveDetails{}, ReceiveContextCanceled
 	}
+	defer pc.lock.Unlock()
 	return pc.receiveSingleMessage(ctx, false)
 }
 
@@ -93,13 +84,11 @@ func (pc *PriorityChannel[T]) ReceiveWithDefaultCase() (msg T, channelName strin
 }
 
 func (pc *PriorityChannel[T]) ReceiveWithDefaultCaseEx() (msg T, details ReceiveDetails, status ReceiveStatus) {
-	if pc.lock != nil {
-		gotLock := psync.TryLockOrExitOnState(pc.lock, pc.blockWaitAllChannelsTracker)
-		if !gotLock {
-			return getZero[T](), ReceiveDetails{}, ReceiveDefaultCase
-		}
-		defer pc.lock.Unlock()
+	gotLock := psync.TryLockOrExitOnState(pc.lock, pc.blockWaitAllChannelsTracker)
+	if !gotLock {
+		return getZero[T](), ReceiveDetails{}, ReceiveDefaultCase
 	}
+	defer pc.lock.Unlock()
 	return pc.receiveSingleMessage(context.Background(), true)
 }
 
@@ -110,16 +99,27 @@ func (pc *PriorityChannel[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
 }
 
 func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName string) bool {
-	state, ok := pc.closedInputChannels[channelName]
-	if !ok {
+	var recoveredC chan struct{}
+	var canAwait bool
+
+	pc.applyControlOperation(func() {
+		var state *closedChannelState
+		state, canAwait = pc.closedInputChannels[channelName]
+		if !canAwait {
+			return
+		}
+		recoveredC = state.recoveredC
+	})
+	if !canAwait {
 		return true
 	}
+
 	select {
 	case <-pc.ctx.Done():
 		return false
 	case <-ctx.Done():
 		return false
-	case <-state.recoveredC:
+	case <-recoveredC:
 		return true
 	}
 }
@@ -127,7 +127,6 @@ func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName stri
 type ClosedChannelEvent[T any] struct {
 	ChannelName string
 	Details     ReceiveDetails
-	RecoverFunc func(<-chan T)
 }
 
 func (pc *PriorityChannel[T]) notifyClosedChannelSubscribers(channelName string, pathInTree []selectable.ChannelNode) {
@@ -138,19 +137,16 @@ func (pc *PriorityChannel[T]) notifyClosedChannelSubscribers(channelName string,
 		subscriber <- ClosedChannelEvent[T]{
 			ChannelName: channelName,
 			Details:     toReceiveDetails(channelName, pathInTree),
-			RecoverFunc: func(ch <-chan T) {
-				pc.recoverClosedInputChannel(channelName, ch)
-			},
 		}
 	}
 }
 
-func (pc *PriorityChannel[T]) recoverClosedInputChannel(channelName string, ch <-chan T) {
-	state, ok := pc.closedInputChannels[channelName]
-	if !ok {
-		return
-	}
+func (pc *PriorityChannel[T]) RecoverClosedInputChannel(channelName string, ch <-chan T) {
 	pc.applyControlOperation(func() {
+		state, ok := pc.closedInputChannels[channelName]
+		if !ok {
+			return
+		}
 		pc.compositeChannel.RecoverClosedChannel(ch, state.pathInTree)
 		pc.channelNameToChannel[channelName] = ch
 		delete(pc.closedInputChannels, channelName)
@@ -159,14 +155,16 @@ func (pc *PriorityChannel[T]) recoverClosedInputChannel(channelName string, ch <
 }
 
 func (pc *PriorityChannel[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration) error {
-	priorityChannel, err := NewFromConfiguration(pc.ctx, priorityConfiguration, pc.channelNameToChannel)
-	if err != nil {
-		return err
-	}
+	var resErr error
 	pc.applyControlOperation(func() {
+		priorityChannel, err := NewFromConfiguration(pc.ctx, priorityConfiguration, pc.channelNameToChannel)
+		if err != nil {
+			resErr = err
+			return
+		}
 		pc.doUpdatePriorityConfiguration(priorityChannel)
 	})
-	return nil
+	return resErr
 }
 
 func (pc *PriorityChannel[T]) doUpdatePriorityConfiguration(priorityChannel *PriorityChannel[T]) {
@@ -234,6 +232,12 @@ func (pc *PriorityChannel[T]) applyControlOperation(controlOperation func()) {
 }
 
 func (pc *PriorityChannel[T]) Close() {
+	pc.notifyMtx.Lock()
+	for _, ch := range pc.closedChannelSubscribers {
+		close(ch)
+	}
+	pc.notifyMtx.Unlock()
+
 	pc.ctxCancel()
 }
 

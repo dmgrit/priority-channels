@@ -28,13 +28,13 @@ func main() {
 
 	var inputChannels []chan string
 	var triggerPauseOrCloseChannels []chan bool
-	var triggerRecoverChannels []chan struct{}
+	var triggerRecoverChannels []chan chan string
 
 	channelsNum := 8
 	for i := 1; i <= channelsNum; i++ {
 		inputChannels = append(inputChannels, make(chan string))
 		triggerPauseOrCloseChannels = append(triggerPauseOrCloseChannels, make(chan bool))
-		triggerRecoverChannels = append(triggerRecoverChannels, make(chan struct{}))
+		triggerRecoverChannels = append(triggerRecoverChannels, make(chan chan string))
 	}
 
 	channelsOrder := map[string]int{
@@ -63,7 +63,7 @@ func main() {
 	}
 
 	for i := 1; i <= channelsNum; i++ {
-		go func(i int) {
+		go func(triggerPauseOrCloseChannel chan bool, inputChannel chan string, triggerRecoverChannel chan chan string) {
 			paused := false
 			closed := false
 			j := 0
@@ -71,33 +71,33 @@ func main() {
 				j++
 				imageName := randString(16)
 				select {
-				case b := <-triggerPauseOrCloseChannels[i-1]:
+				case b := <-triggerPauseOrCloseChannel:
 					if b && !closed {
-						close(inputChannels[i-1])
+						close(inputChannel)
 						closed = true
-					} else {
+					} else if !closed {
 						paused = !paused
 					}
-				case <-triggerRecoverChannels[i-1]:
+				case inputChannel = <-triggerRecoverChannel:
 					closed = false
 				default:
 					if !paused && !closed {
 						select {
-						case b := <-triggerPauseOrCloseChannels[i-1]:
+						case b := <-triggerPauseOrCloseChannel:
 							if b && !closed {
-								close(inputChannels[i-1])
+								close(inputChannel)
 								closed = true
 							} else {
 								paused = !paused
 							}
-						case inputChannels[i-1] <- fmt.Sprintf("image-%s-%d", imageName, j):
+						case inputChannel <- fmt.Sprintf("image-%s-%d", imageName, j):
 						}
 					} else {
 						time.Sleep(100 * time.Millisecond)
 					}
 				}
 			}
-		}(i)
+		}(triggerPauseOrCloseChannels[i-1], inputChannels[i-1], triggerRecoverChannels[i-1])
 	}
 
 	receivedMsgs := 0
@@ -119,10 +119,13 @@ func main() {
 	}
 
 	notifyCloseCh := make(chan priority_channels.ClosedChannelEvent[string])
-	closedChannelNameToRecoveryFn := make(map[string]func(<-chan string))
+	closedChannelNameToRecoveryFn := make(map[string]struct{})
+	var closedChannelNameToRecoveryFnMtx sync.Mutex
 	go func() {
 		for closedEvent := range notifyCloseCh {
-			closedChannelNameToRecoveryFn[closedEvent.ChannelName] = closedEvent.RecoverFunc
+			closedChannelNameToRecoveryFnMtx.Lock()
+			closedChannelNameToRecoveryFn[closedEvent.ChannelName] = struct{}{}
+			closedChannelNameToRecoveryFnMtx.Unlock()
 		}
 	}()
 	wp.NotifyClose(notifyCloseCh)
@@ -243,16 +246,19 @@ func main() {
 					channelIndex = 2
 					channelName = "Channel C"
 				}
-				recoveryFn, ok := closedChannelNameToRecoveryFn[channelName]
+				closedChannelNameToRecoveryFnMtx.Lock()
+				_, ok := closedChannelNameToRecoveryFn[channelName]
 				if !ok {
+					closedChannelNameToRecoveryFnMtx.Unlock()
 					fmt.Printf("Recovery is not enabled for channel %s\n", channelName)
 					continue
 				}
 				newChannel := make(chan string)
 				inputChannels[channelIndex] = newChannel
-				recoveryFn(newChannel)
+				wp.RecoverClosedInputChannel(channelName, newChannel)
 				delete(closedChannelNameToRecoveryFn, channelName)
-				triggerRecoverChannels[channelIndex] <- struct{}{}
+				closedChannelNameToRecoveryFnMtx.Unlock()
+				triggerRecoverChannels[channelIndex] <- newChannel
 				fmt.Printf("Recovering %s\n", channelName)
 			case "quit":
 				wp.Stop()
