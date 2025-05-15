@@ -283,7 +283,7 @@ func (s *HighestAlwaysFirst) EnableSelectCase(index int) {
 	if s.sortedPriorities[i].SamePriorityRange != nil {
 		s.sortedPriorities[i].SamePriorityRange.EnableSelectCase(index)
 	}
-	s.totalSortedPriorities--
+	s.totalSortedPriorities++
 }
 
 func (s *HighestAlwaysFirst) getSortedIndexByOriginalIndex(index int) int {
