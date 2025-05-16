@@ -1,12 +1,15 @@
 package selectable
 
+import "context"
+
 type Channel[T any] interface {
 	ChannelName() string
 	NextSelectCases(upto int) (selectCases []SelectCase[T], isLastIteration bool, closedChannel *ClosedChannelDetails)
 	UpdateOnCaseSelected(pathInTree []ChannelNode, recvOK bool)
-	RecoverClosedChannel(ch <-chan T, pathInTree []ChannelNode)
+	RecoverClosedInputChannel(ch <-chan T, pathInTree []ChannelNode)
+	RecoverClosedPriorityChannel(ctx context.Context, pathInTree []ChannelNode)
 	GetInputChannels(map[string]<-chan T) error
-	GetChannelsPaths(result map[string][]ChannelNode, currPathInTree []ChannelNode)
+	GetInputChannelsPaths(result map[string][]ChannelNode, currPathInTree []ChannelNode)
 	Clone() Channel[T]
 }
 

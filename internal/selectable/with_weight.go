@@ -1,6 +1,7 @@
 package selectable
 
 import (
+	"context"
 	"fmt"
 	"github.com/dmgrit/priority-channels/channels"
 )
@@ -32,8 +33,12 @@ func (c *channelWithWeight[T, W]) NextSelectCases(upto int) ([]SelectCase[T], bo
 
 func (c *channelWithWeight[T, W]) UpdateOnCaseSelected(pathInTree []ChannelNode, recvOK bool) {}
 
-func (c *channelWithWeight[T, W]) RecoverClosedChannel(ch <-chan T, pathInTree []ChannelNode) {
+func (c *channelWithWeight[T, W]) RecoverClosedInputChannel(ch <-chan T, pathInTree []ChannelNode) {
 	c.msgsC = ch
+}
+
+func (c *channelWithWeight[T, W]) RecoverClosedPriorityChannel(ctx context.Context, pathInTree []ChannelNode) {
+	// this should never be called
 }
 
 func (c *channelWithWeight[T, W]) GetInputChannels(m map[string]<-chan T) error {
@@ -44,7 +49,7 @@ func (c *channelWithWeight[T, W]) GetInputChannels(m map[string]<-chan T) error 
 	return nil
 }
 
-func (c *channelWithWeight[T, W]) GetChannelsPaths(m map[string][]ChannelNode, currPathInTree []ChannelNode) {
+func (c *channelWithWeight[T, W]) GetInputChannelsPaths(m map[string][]ChannelNode, currPathInTree []ChannelNode) {
 	if _, ok := m[c.channelName]; !ok {
 		return
 	}

@@ -86,9 +86,15 @@ func doConsume[T any, R any](c *PriorityConsumer[T], fnGetResult func(msg T, det
 			// but on processing the message we pass the priority-channel context
 			msg, receiveDetails, status := c.priorityChannel.ReceiveWithContextEx(context.Background())
 			channelName := receiveDetails.ChannelName
-			if status == ReceiveChannelClosed {
+			if channelName != "" && (status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed) {
+				var channelType ChannelType
+				if status == ReceiveChannelClosed {
+					channelType = InputChannelType
+				} else {
+					channelType = PriorityChannelType
+				}
 				c.setPaused(status.ExitReason(), channelName)
-				if c.priorityChannel.AwaitRecover(context.Background(), channelName) {
+				if c.priorityChannel.AwaitRecover(context.Background(), channelName, channelType) {
 					c.setResumed()
 				}
 				continue
@@ -123,6 +129,30 @@ func (c *PriorityConsumer[T]) UpdatePriorityConfiguration(priorityConfiguration 
 	if err != nil {
 		return fmt.Errorf("failed to create priority channel from configuration: %w", err)
 	}
+	return nil
+}
+
+func (c *PriorityConsumer[T]) RecoverClosedInputChannel(channelName string, ch <-chan T) error {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+
+	if c.isStopping {
+		return errors.New("cannot recover input channel after stopping")
+	}
+
+	c.priorityChannel.RecoverClosedInputChannel(channelName, ch)
+	return nil
+}
+
+func (c *PriorityConsumer[T]) RecoverClosedPriorityChannel(channelName string, ctx context.Context) error {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+
+	if c.isStopping {
+		return errors.New("cannot recover priority channel after stopping")
+	}
+
+	c.priorityChannel.RecoverClosedPriorityChannel(channelName, ctx)
 	return nil
 }
 

@@ -101,8 +101,14 @@ func doProcess[T any, R any](p *DynamicWorkerPool[T], fnGetResult func(msg T, de
 					return
 				} else if status != ReceiveContextCancelled {
 					p.setPaused(status.ExitReason(), receiveDetails.ChannelName)
-					if status == ReceiveChannelClosed {
-						if p.priorityChannel.AwaitRecover(context.Background(), receiveDetails.ChannelName) {
+					if status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed {
+						var channelType ChannelType
+						if status == ReceiveChannelClosed {
+							channelType = InputChannelType
+						} else {
+							channelType = PriorityChannelType
+						}
+						if p.priorityChannel.AwaitRecover(context.Background(), receiveDetails.ChannelName, channelType) {
 							p.setResumed()
 						}
 					} else {

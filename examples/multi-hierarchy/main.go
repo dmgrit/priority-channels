@@ -21,6 +21,7 @@ func main() {
 	var inputChannels []chan string
 	var triggerPauseChannels []chan bool
 	var triggerCloseChannels []chan bool
+	priorityChannelsCancelFuncs := make(map[string]context.CancelFunc)
 
 	channelsNum := 5
 	for i := 1; i <= channelsNum; i++ {
@@ -249,19 +250,39 @@ func main() {
 			switch upperLine {
 			case "CA":
 				fmt.Printf("Closing Priority Channel of Customer A\n")
-				customerAPriorityChannel.Close()
+				if cancelFunc, ok := priorityChannelsCancelFuncs["Customer A"]; ok {
+					cancelFunc()
+					delete(priorityChannelsCancelFuncs, "Customer A")
+				} else {
+					customerAPriorityChannel.Close()
+				}
 				continue
 			case "CB":
 				fmt.Printf("Closing Priority Channel of Customer B\n")
-				customerBPriorityChannel.Close()
+				if cancelFunc, ok := priorityChannelsCancelFuncs["Customer B"]; ok {
+					cancelFunc()
+					delete(priorityChannelsCancelFuncs, "Customer B")
+				} else {
+					customerBPriorityChannel.Close()
+				}
 				continue
 			case "CU":
 				fmt.Printf("Closing Priority Channel of Urgent Messages\n")
-				urgentMessagesPriorityChannel.Close()
+				if cancelFunc, ok := priorityChannelsCancelFuncs["Urgent Messages"]; ok {
+					cancelFunc()
+					delete(priorityChannelsCancelFuncs, "Urgent Messages")
+				} else {
+					urgentMessagesPriorityChannel.Close()
+				}
 				continue
 			case "CC":
 				fmt.Printf("Closing Combined Priority Channel of Both Customers\n")
-				combinedUsersAndMessageTypesPriorityChannel.Close()
+				if cancelFunc, ok := priorityChannelsCancelFuncs["Customer Messages"]; ok {
+					cancelFunc()
+					delete(priorityChannelsCancelFuncs, "Customer Messages")
+				} else {
+					combinedUsersAndMessageTypesPriorityChannel.Close()
+				}
 				continue
 			case "CG":
 				fmt.Printf("Closing Priority Channel \n")
@@ -298,6 +319,26 @@ func main() {
 		case "U", "NU":
 			triggerPauseChannels[4] <- value
 			fmt.Printf(operation + " receiving Urgent messages\n")
+		case "RA":
+			fmt.Printf("Recovering Priority Channel of Customer A\n")
+			newCtx, cancelFunc := context.WithCancel(context.Background())
+			priorityChannelsCancelFuncs["Customer A"] = cancelFunc
+			ch.RecoverClosedPriorityChannel("Customer A", newCtx)
+		case "RB":
+			fmt.Printf("Recovering Priority Channel of Customer B\n")
+			newCtx, cancelFunc := context.WithCancel(context.Background())
+			priorityChannelsCancelFuncs["Customer B"] = cancelFunc
+			ch.RecoverClosedPriorityChannel("Customer B", newCtx)
+		case "RU":
+			fmt.Printf("Recovering Priority Channel of Urgent Messages\n")
+			newCtx, cancelFunc := context.WithCancel(context.Background())
+			priorityChannelsCancelFuncs["Urgent Messages"] = cancelFunc
+			ch.RecoverClosedPriorityChannel("Urgent Messages", newCtx)
+		case "RCC":
+			fmt.Printf("Recovering Combined Priority Channel of Both Customers\n")
+			newCtx, cancelFunc := context.WithCancel(context.Background())
+			priorityChannelsCancelFuncs["Customer Messages"] = cancelFunc
+			ch.RecoverClosedPriorityChannel("Customer Messages", newCtx)
 		case "D":
 			presentDetails.Store(true)
 		case "ND":

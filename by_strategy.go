@@ -159,18 +159,32 @@ func (c *compositeChannelByPrioritization[T, W]) UpdateOnCaseSelected(pathInTree
 	}
 }
 
-func (c *compositeChannelByPrioritization[T, W]) RecoverClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+func (c *compositeChannelByPrioritization[T, W]) RecoverClosedInputChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+	recoverFn := func(selectedChannel selectable.ChannelWithWeight[T, W], pathInTree []selectable.ChannelNode) {
+		selectedChannel.RecoverClosedInputChannel(ch, pathInTree)
+	}
+	c.doRecoverClosedChannel(recoverFn, pathInTree)
+}
+
+func (c *compositeChannelByPrioritization[T, W]) RecoverClosedPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
+	recoverFn := func(selectedChannel selectable.ChannelWithWeight[T, W], pathInTree []selectable.ChannelNode) {
+		selectedChannel.RecoverClosedPriorityChannel(ctx, pathInTree)
+	}
+	c.doRecoverClosedChannel(recoverFn, pathInTree)
+}
+
+func (c *compositeChannelByPrioritization[T, W]) doRecoverClosedChannel(recoverFn func(selectable.ChannelWithWeight[T, W], []selectable.ChannelNode), pathInTree []selectable.ChannelNode) {
 	if len(pathInTree) == 0 {
 		return
 	}
 	if len(pathInTree) == 1 {
 		selectedChannel := c.channels[pathInTree[0].ChannelIndex]
-		selectedChannel.RecoverClosedChannel(ch, nil)
+		recoverFn(selectedChannel, nil)
 		c.strategy.EnableSelectCase(pathInTree[0].ChannelIndex)
 		return
 	}
 	selectedChannel := c.channels[pathInTree[len(pathInTree)-1].ChannelIndex]
-	selectedChannel.RecoverClosedChannel(ch, pathInTree[:len(pathInTree)-1])
+	recoverFn(selectedChannel, pathInTree[:len(pathInTree)-1])
 }
 
 func (c *compositeChannelByPrioritization[T, W]) GetInputChannels(m map[string]<-chan T) error {
@@ -182,9 +196,9 @@ func (c *compositeChannelByPrioritization[T, W]) GetInputChannels(m map[string]<
 	return nil
 }
 
-func (c *compositeChannelByPrioritization[T, W]) GetChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
+func (c *compositeChannelByPrioritization[T, W]) GetInputChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
 	for i, ch := range c.channels {
-		ch.GetChannelsPaths(m, append(currPathInTree, selectable.ChannelNode{
+		ch.GetInputChannelsPaths(m, append(currPathInTree, selectable.ChannelNode{
 			ChannelName:  ch.ChannelName(),
 			ChannelIndex: i,
 		}))

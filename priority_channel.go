@@ -22,7 +22,15 @@ type PriorityChannel[T any] struct {
 	closedChannelSubscribers    []chan ClosedChannelEvent[T]
 	channelNameToChannel        map[string]<-chan T
 	closedInputChannels         map[string]*closedChannelState
+	closedPriorityChannels      map[string]*closedChannelState
 }
+
+type ChannelType int
+
+const (
+	InputChannelType ChannelType = iota
+	PriorityChannelType
+)
 
 type closedChannelState struct {
 	pathInTree []selectable.ChannelNode
@@ -46,6 +54,7 @@ func newPriorityChannel[T any](ctx context.Context, compositeChannel selectable.
 		blockWaitAllChannelsTracker: psync.NewRepeatingStateTracker(),
 		channelNameToChannel:        channelNameToChannel,
 		closedInputChannels:         make(map[string]*closedChannelState),
+		closedPriorityChannels:      make(map[string]*closedChannelState),
 	}
 }
 
@@ -98,13 +107,21 @@ func (pc *PriorityChannel[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
 	pc.closedChannelSubscribers = append(pc.closedChannelSubscribers, ch)
 }
 
-func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName string) bool {
+func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName string, channelType ChannelType) bool {
+	if channelType == InputChannelType {
+		return pc.awaitRecover(ctx, channelName, pc.closedInputChannels)
+	} else {
+		return pc.awaitRecover(ctx, channelName, pc.closedPriorityChannels)
+	}
+}
+
+func (pc *PriorityChannel[T]) awaitRecover(ctx context.Context, channelName string, closedChannels map[string]*closedChannelState) bool {
 	var recoveredC chan struct{}
 	var canAwait bool
 
 	pc.applyControlOperation(func() {
 		var state *closedChannelState
-		state, canAwait = pc.closedInputChannels[channelName]
+		state, canAwait = closedChannels[channelName]
 		if !canAwait {
 			return
 		}
@@ -126,16 +143,18 @@ func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName stri
 
 type ClosedChannelEvent[T any] struct {
 	ChannelName string
+	ChannelType ChannelType
 	Details     ReceiveDetails
 }
 
-func (pc *PriorityChannel[T]) notifyClosedChannelSubscribers(channelName string, pathInTree []selectable.ChannelNode) {
+func (pc *PriorityChannel[T]) notifyClosedChannelSubscribers(channelName string, channelType ChannelType, pathInTree []selectable.ChannelNode) {
 	pc.notifyMtx.Lock()
 	defer pc.notifyMtx.Unlock()
 
 	for _, subscriber := range pc.closedChannelSubscribers {
 		subscriber <- ClosedChannelEvent[T]{
 			ChannelName: channelName,
+			ChannelType: channelType,
 			Details:     toReceiveDetails(channelName, pathInTree),
 		}
 	}
@@ -147,9 +166,21 @@ func (pc *PriorityChannel[T]) RecoverClosedInputChannel(channelName string, ch <
 		if !ok {
 			return
 		}
-		pc.compositeChannel.RecoverClosedChannel(ch, state.pathInTree)
+		pc.compositeChannel.RecoverClosedInputChannel(ch, state.pathInTree)
 		pc.channelNameToChannel[channelName] = ch
 		delete(pc.closedInputChannels, channelName)
+		close(state.recoveredC)
+	})
+}
+
+func (pc *PriorityChannel[T]) RecoverClosedPriorityChannel(channelName string, ctx context.Context) {
+	pc.applyControlOperation(func() {
+		state, ok := pc.closedPriorityChannels[channelName]
+		if !ok {
+			return
+		}
+		pc.compositeChannel.RecoverClosedPriorityChannel(ctx, state.pathInTree)
+		delete(pc.closedPriorityChannels, channelName)
 		close(state.recoveredC)
 	})
 }
@@ -171,12 +202,14 @@ func (pc *PriorityChannel[T]) doUpdatePriorityConfiguration(priorityChannel *Pri
 	pc.compositeChannel = priorityChannel.compositeChannel
 	pc.channelReceiveWaitInterval = priorityChannel.channelReceiveWaitInterval
 
+	// preserving state for input channels but not for inner priority channels:
+	// inner priority channels are replaced on updating priority configuration
 	if len(pc.closedInputChannels) > 0 {
 		newChannelPaths := make(map[string][]selectable.ChannelNode)
 		for channelName := range pc.closedInputChannels {
 			newChannelPaths[channelName] = nil
 		}
-		pc.compositeChannel.GetChannelsPaths(newChannelPaths, nil)
+		pc.compositeChannel.GetInputChannelsPaths(newChannelPaths, nil)
 		for channelName := range pc.closedInputChannels {
 			channelPath := newChannelPaths[channelName]
 			if channelPath == nil {
@@ -186,6 +219,9 @@ func (pc *PriorityChannel[T]) doUpdatePriorityConfiguration(priorityChannel *Pri
 			pc.closedInputChannels[channelName].pathInTree = pathInTree
 			pc.compositeChannel.UpdateOnCaseSelected(pathInTree, false)
 		}
+	}
+	if len(pc.closedPriorityChannels) > 0 {
+		pc.closedPriorityChannels = make(map[string]*closedChannelState)
 	}
 }
 
@@ -250,15 +286,21 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 	default:
 	}
 	msg, channelName, pathInTree, status := pc.doReceiveSingleMessage(ctx, withDefaultCase)
-	for status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed {
+	for (status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed) && channelName != "" {
 		pc.compositeChannel.UpdateOnCaseSelected(pathInTree, false)
-		if status == ReceiveChannelClosed {
-			pc.closedInputChannels[channelName] = &closedChannelState{
-				pathInTree: pathInTree,
-				recoveredC: make(chan struct{}),
-			}
-			pc.notifyClosedChannelSubscribers(channelName, pathInTree)
+		closedState := &closedChannelState{
+			pathInTree: pathInTree,
+			recoveredC: make(chan struct{}),
 		}
+		var channelType ChannelType
+		if status == ReceiveChannelClosed {
+			channelType = InputChannelType
+			pc.closedInputChannels[channelName] = closedState
+		} else {
+			channelType = PriorityChannelType
+			pc.closedPriorityChannels[channelName] = closedState
+		}
+		pc.notifyClosedChannelSubscribers(channelName, channelType, pathInTree)
 		prevChannelName := channelName
 		msg, channelName, pathInTree, status = pc.doReceiveSingleMessage(ctx, withDefaultCase)
 		if channelName == prevChannelName && (status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed) {
