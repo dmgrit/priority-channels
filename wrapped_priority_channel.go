@@ -77,16 +77,24 @@ func (oc *overrideCompositeChannelName[T]) UpdateOnCaseSelected(pathInTree []sel
 	oc.channel.UpdateOnCaseSelected(pathInTree, recvOK)
 }
 
-func (oc *overrideCompositeChannelName[T]) RecoverClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
-	oc.channel.RecoverClosedChannel(ch, pathInTree)
+func (oc *overrideCompositeChannelName[T]) RecoverClosedInputChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+	oc.channel.RecoverClosedInputChannel(ch, pathInTree)
+}
+
+func (oc *overrideCompositeChannelName[T]) RecoverClosedPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
+	if len(pathInTree) == 0 {
+		oc.ctx = ctx
+		return
+	}
+	oc.channel.RecoverClosedPriorityChannel(ctx, pathInTree)
 }
 
 func (oc *overrideCompositeChannelName[T]) GetInputChannels(m map[string]<-chan T) error {
 	return oc.channel.GetInputChannels(m)
 }
 
-func (oc *overrideCompositeChannelName[T]) GetChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
-	oc.channel.GetChannelsPaths(m, currPathInTree)
+func (oc *overrideCompositeChannelName[T]) GetInputChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
+	oc.channel.GetInputChannelsPaths(m, currPathInTree)
 }
 
 func (oc *overrideCompositeChannelName[T]) Clone() overrideCompositeChannelName[T] {

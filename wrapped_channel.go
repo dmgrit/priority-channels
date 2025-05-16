@@ -54,11 +54,15 @@ func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []selectable.Channel
 	}
 }
 
-func (c *wrappedChannel[T]) RecoverClosedChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+func (c *wrappedChannel[T]) RecoverClosedInputChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
 	if c.disabled {
 		c.disabled = false
 	}
 	c.msgsC = ch
+}
+
+func (c *wrappedChannel[T]) RecoverClosedPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
+	c.ctx = ctx
 }
 
 func (c *wrappedChannel[T]) GetInputChannels(m map[string]<-chan T) error {
@@ -69,7 +73,7 @@ func (c *wrappedChannel[T]) GetInputChannels(m map[string]<-chan T) error {
 	return nil
 }
 
-func (c *wrappedChannel[T]) GetChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
+func (c *wrappedChannel[T]) GetInputChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
 	if _, ok := m[c.channelName]; !ok {
 		return
 	}
