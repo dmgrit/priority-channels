@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/dmgrit/priority-channels/internal/synchronization"
 )
@@ -27,9 +26,10 @@ type DynamicWorkerPool[T any] struct {
 	isStopped                      bool
 	exitReason                     ExitReason
 	exitReasonChannelName          string
+	closureBehaviour               ClosureBehavior
 }
 
-func NewDynamicWorkerPool[T any](ctx context.Context, priorityChannel *PriorityChannel[T], numWorkers int) (*DynamicWorkerPool[T], error) {
+func NewDynamicWorkerPool[T any](ctx context.Context, priorityChannel *PriorityChannel[T], numWorkers int, closureBehaviour ClosureBehavior) (*DynamicWorkerPool[T], error) {
 	if numWorkers < 0 {
 		return nil, errors.New("number of workers must be a non-negative number")
 	}
@@ -50,7 +50,28 @@ func NewDynamicWorkerPool[T any](ctx context.Context, priorityChannel *PriorityC
 		ctx:                            ctxWithCancel,
 		cancel:                         cancel,
 		restartFromStoppedStateTracker: synchronization.NewRepeatingStateTracker(),
+		closureBehaviour:               closureBehaviour,
 	}, nil
+}
+
+type ChannelClosureBehavior int
+
+const (
+	StopOnClosed ChannelClosureBehavior = iota
+	PauseOnClosed
+)
+
+type NoOpenChannelsBehavior int
+
+const (
+	StopWhenNoOpenChannels NoOpenChannelsBehavior = iota
+	PauseWhenNoOpenChannels
+)
+
+type ClosureBehavior struct {
+	InputChannelClosureBehavior    ChannelClosureBehavior
+	PriorityChannelClosureBehavior ChannelClosureBehavior
+	NoOpenChannelsBehavior         NoOpenChannelsBehavior
 }
 
 func (p *DynamicWorkerPool[T]) Process(processFn func(Delivery[T])) error {
@@ -100,19 +121,26 @@ func doProcess[T any, R any](p *DynamicWorkerPool[T], fnGetResult func(msg T, de
 				} else if status == ReceivePriorityChannelClosed && receiveDetails.ChannelName == "" {
 					return
 				} else if status != ReceiveContextCancelled {
-					p.setPaused(status.ExitReason(), receiveDetails.ChannelName)
-					if status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed {
+					if (status == ReceiveChannelClosed && p.closureBehaviour.InputChannelClosureBehavior == PauseOnClosed) ||
+						(status == ReceivePriorityChannelClosed && p.closureBehaviour.PriorityChannelClosureBehavior == PauseOnClosed) {
 						var channelType ChannelType
 						if status == ReceiveChannelClosed {
 							channelType = InputChannelType
 						} else {
 							channelType = PriorityChannelType
 						}
+						p.setPaused(status.ExitReason(), receiveDetails.ChannelName)
 						if p.priorityChannel.AwaitRecover(context.Background(), receiveDetails.ChannelName, channelType) {
 							p.setResumed()
 						}
+					} else if status == ReceiveNoOpenChannels && p.closureBehaviour.NoOpenChannelsBehavior == PauseWhenNoOpenChannels {
+						p.setPaused(status.ExitReason(), receiveDetails.ChannelName)
+						if p.priorityChannel.AwaitOpenChannel(context.Background()) {
+							p.setResumed()
+						}
 					} else {
-						time.Sleep(time.Microsecond * 100)
+						p.setPaused(status.ExitReason(), receiveDetails.ChannelName)
+						return
 					}
 				}
 				<-sem

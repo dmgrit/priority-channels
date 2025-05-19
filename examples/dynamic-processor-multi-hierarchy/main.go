@@ -128,7 +128,12 @@ func main() {
 		byChannelName[fullChannelPath] = byChannelName[fullChannelPath] + 1
 		receivedMsgsMutex.Unlock()
 	}
-	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, channelNameToChannel, priorityConfig, 3)
+	closureBehavior := priority_channels.ClosureBehavior{
+		InputChannelClosureBehavior:    priority_channels.PauseOnClosed,
+		PriorityChannelClosureBehavior: priority_channels.PauseOnClosed,
+		NoOpenChannelsBehavior:         priority_channels.PauseWhenNoOpenChannels,
+	}
+	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, channelNameToChannel, priorityConfig, 3, closureBehavior)
 	if err != nil {
 		fmt.Printf("failed to initialize dynamic priority processor: %v\n", err)
 		os.Exit(1)

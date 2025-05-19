@@ -13,7 +13,8 @@ func NewDynamicPriorityProcessor[T any](
 	ctx context.Context,
 	channelNameToChannel map[string]<-chan T,
 	priorityConfiguration Configuration,
-	workersNum int) (*DynamicPriorityProcessor[T], error) {
+	workersNum int,
+	closureBehaviour ClosureBehavior) (*DynamicPriorityProcessor[T], error) {
 	priorityChannel, err := NewFromConfiguration(ctx, priorityConfiguration, channelNameToChannel)
 	if err != nil {
 		return nil, err
@@ -21,7 +22,7 @@ func NewDynamicPriorityProcessor[T any](
 	// We're closing the worker pool by having the consumer close its delivery channel.
 	// We want the pool to continue processing messages until the consumer explicitly signals that it has stopped.
 	// That's why we don't pass the same context used to cancel the consumer to the pool.
-	workerPool, err := NewDynamicWorkerPool(context.Background(), priorityChannel, workersNum)
+	workerPool, err := NewDynamicWorkerPool(context.Background(), priorityChannel, workersNum, closureBehaviour)
 	if err != nil {
 		return nil, err
 	}

@@ -23,6 +23,7 @@ type PriorityChannel[T any] struct {
 	channelNameToChannel        map[string]<-chan T
 	closedInputChannels         map[string]*closedChannelState
 	closedPriorityChannels      map[string]*closedChannelState
+	waitingForOpenChannelC      chan struct{}
 }
 
 type ChannelType int
@@ -141,6 +142,27 @@ func (pc *PriorityChannel[T]) awaitRecover(ctx context.Context, channelName stri
 	}
 }
 
+func (pc *PriorityChannel[T]) AwaitOpenChannel(ctx context.Context) bool {
+	var waitingForOpenChannelC chan struct{}
+
+	pc.applyControlOperation(func() {
+		waitingForOpenChannelC = pc.waitingForOpenChannelC
+	})
+
+	if waitingForOpenChannelC == nil {
+		return true
+	}
+
+	select {
+	case <-pc.ctx.Done():
+		return false
+	case <-ctx.Done():
+		return false
+	case <-waitingForOpenChannelC:
+		return true
+	}
+}
+
 type ClosedChannelEvent[T any] struct {
 	ChannelName string
 	ChannelType ChannelType
@@ -170,6 +192,11 @@ func (pc *PriorityChannel[T]) RecoverClosedInputChannel(channelName string, ch <
 		pc.channelNameToChannel[channelName] = ch
 		delete(pc.closedInputChannels, channelName)
 		close(state.recoveredC)
+
+		if pc.waitingForOpenChannelC != nil && pc.canReceiveMessages() {
+			close(pc.waitingForOpenChannelC)
+			pc.waitingForOpenChannelC = nil
+		}
 	})
 }
 
@@ -182,6 +209,11 @@ func (pc *PriorityChannel[T]) RecoverClosedPriorityChannel(channelName string, c
 		pc.compositeChannel.RecoverClosedPriorityChannel(ctx, state.pathInTree)
 		delete(pc.closedPriorityChannels, channelName)
 		close(state.recoveredC)
+
+		if pc.waitingForOpenChannelC != nil && pc.canReceiveMessages() {
+			close(pc.waitingForOpenChannelC)
+			pc.waitingForOpenChannelC = nil
+		}
 	})
 }
 
@@ -221,7 +253,15 @@ func (pc *PriorityChannel[T]) doUpdatePriorityConfiguration(priorityChannel *Pri
 		}
 	}
 	if len(pc.closedPriorityChannels) > 0 {
+		for _, state := range pc.closedPriorityChannels {
+			close(state.recoveredC)
+		}
 		pc.closedPriorityChannels = make(map[string]*closedChannelState)
+	}
+
+	if pc.waitingForOpenChannelC != nil && pc.canReceiveMessages() {
+		close(pc.waitingForOpenChannelC)
+		pc.waitingForOpenChannelC = nil
 	}
 }
 
@@ -372,6 +412,23 @@ type ChannelNode struct {
 	ChannelIndex int
 }
 
+func (pc *PriorityChannel[T]) canReceiveMessages() bool {
+	nextNumOfChannelsToProcess := 1
+	for {
+		channelsSelectCases, isLastIteration, closedChannel := pc.compositeChannel.NextSelectCases(nextNumOfChannelsToProcess)
+		if closedChannel != nil {
+			return false
+		}
+		if len(channelsSelectCases) > 0 {
+			return true
+		}
+		if isLastIteration {
+			return false
+		}
+		nextNumOfChannelsToProcess++
+	}
+}
+
 func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDefaultCase bool) (msg T, channelName string, PathInTree []selectable.ChannelNode, status ReceiveStatus) {
 	nextNumOfChannelsToProcess := 1
 	for {
@@ -381,6 +438,7 @@ func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDe
 		}
 		if len(channelsSelectCases) == 0 {
 			if isLastIteration {
+				pc.waitingForOpenChannelC = make(chan struct{})
 				return getZero[T](), "", nil, ReceiveNoOpenChannels
 			} else {
 				nextNumOfChannelsToProcess++

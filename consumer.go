@@ -19,6 +19,7 @@ type PriorityConsumer[T any] struct {
 	isStopped                 bool
 	exitReason                ExitReason
 	exitReasonChannelName     string
+	closureBehaviour          ClosureBehavior
 }
 
 type Delivery[T any] struct {
@@ -30,6 +31,7 @@ func NewConsumer[T any](
 	ctx context.Context,
 	channelNameToChannel map[string]<-chan T,
 	priorityConfiguration Configuration,
+	closureBehaviour ClosureBehavior,
 ) (*PriorityConsumer[T], error) {
 	priorityChannel, err := NewFromConfiguration(ctx, priorityConfiguration, channelNameToChannel)
 	if err != nil {
@@ -40,6 +42,7 @@ func NewConsumer[T any](
 		priorityChannel:        priorityChannel,
 		priorityChannelClosedC: make(chan struct{}),
 		forceShutdownChannel:   make(chan struct{}),
+		closureBehaviour:       closureBehaviour,
 	}, nil
 }
 
@@ -86,7 +89,9 @@ func doConsume[T any, R any](c *PriorityConsumer[T], fnGetResult func(msg T, det
 			// but on processing the message we pass the priority-channel context
 			msg, receiveDetails, status := c.priorityChannel.ReceiveWithContextEx(context.Background())
 			channelName := receiveDetails.ChannelName
-			if channelName != "" && (status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed) {
+
+			if (status == ReceiveChannelClosed && c.closureBehaviour.InputChannelClosureBehavior == PauseOnClosed) ||
+				(status == ReceivePriorityChannelClosed && channelName != "" && c.closureBehaviour.PriorityChannelClosureBehavior == PauseOnClosed) {
 				var channelType ChannelType
 				if status == ReceiveChannelClosed {
 					channelType = InputChannelType
@@ -98,10 +103,17 @@ func doConsume[T any, R any](c *PriorityConsumer[T], fnGetResult func(msg T, det
 					c.setResumed()
 				}
 				continue
+			} else if status == ReceiveNoOpenChannels && c.closureBehaviour.NoOpenChannelsBehavior == PauseWhenNoOpenChannels {
+				c.setPaused(status.ExitReason(), channelName)
+				if c.priorityChannel.AwaitOpenChannel(context.Background()) {
+					c.setResumed()
+				}
+				continue
 			} else if status != ReceiveSuccess {
 				c.setClosed(status.ExitReason(), channelName)
 				return
 			}
+
 			select {
 			case deliveries <- fnGetResult(msg, receiveDetails):
 			case <-c.forceShutdownChannel:
