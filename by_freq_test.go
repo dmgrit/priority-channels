@@ -1441,7 +1441,6 @@ func TestProcessMessagesByFrequencyRatio_AutoDisableClosedChannels(t *testing.T)
 				}
 				receivedMessagesCount++
 				fmt.Printf("%s: %s\n", channelName, message)
-				time.Sleep(10 * time.Millisecond)
 			}
 		})
 	}
