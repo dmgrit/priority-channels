@@ -43,10 +43,12 @@ func TestProcessMessagesByStrategy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	done := make(chan pc.ExitReason)
+	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, done)
 
 	time.Sleep(3 * time.Second)
 	cancel()
+	<-done
 
 	expectedResults := []*Msg{
 		{Body: "First-Decimal-Digit-1 Msg-1"},

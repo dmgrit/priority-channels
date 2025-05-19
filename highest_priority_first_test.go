@@ -47,10 +47,12 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	processingDone := make(chan pc.ExitReason)
+	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, processingDone)
 
 	<-done
 	cancel()
+	<-processingDone
 
 	expectedResults := []*Msg{
 		{Body: "Priority-1000 Msg-1"},
@@ -331,10 +333,12 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_CustomWaitInterval(t *t
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	done := make(chan pc.ExitReason)
+	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, done)
 
 	time.Sleep(1 * time.Second)
 	cancel()
+	<-done
 
 	expectedResults := []string{
 		"high priority message 1",
@@ -484,7 +488,8 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_MessagesInOneOfTheChann
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	done := make(chan pc.ExitReason)
+	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, done)
 
 	time.Sleep(1 * time.Second)
 	for j := 6; j <= 7; j++ {
@@ -498,6 +503,7 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_MessagesInOneOfTheChann
 
 	time.Sleep(3 * time.Second)
 	cancel()
+	<-done
 
 	expectedResults := []*Msg{
 		{Body: "Priority-3 Msg-1"},
