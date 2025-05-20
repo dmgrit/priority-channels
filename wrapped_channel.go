@@ -62,7 +62,6 @@ func (c *wrappedChannel[T]) RecoverClosedInputChannel(ch <-chan T, pathInTree []
 }
 
 func (c *wrappedChannel[T]) RecoverClosedPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
-	c.ctx = ctx
 }
 
 func (c *wrappedChannel[T]) GetInputChannels(m map[string]<-chan T) error {
@@ -82,7 +81,6 @@ func (c *wrappedChannel[T]) GetInputChannelsPaths(m map[string][]selectable.Chan
 
 func (c *wrappedChannel[T]) Clone() selectable.Channel[T] {
 	return &wrappedChannel[T]{
-		ctx:                        c.ctx,
 		channelName:                c.channelName,
 		msgsC:                      c.msgsC,
 		autoDisableOnClosedChannel: c.autoDisableOnClosedChannel,

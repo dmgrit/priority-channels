@@ -109,18 +109,16 @@ func (pc *PriorityChannel[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
 }
 
 func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName string, channelType ChannelType) bool {
-	if channelType == InputChannelType {
-		return pc.awaitRecover(ctx, channelName, pc.closedInputChannels)
-	} else {
-		return pc.awaitRecover(ctx, channelName, pc.closedPriorityChannels)
-	}
-}
-
-func (pc *PriorityChannel[T]) awaitRecover(ctx context.Context, channelName string, closedChannels map[string]*closedChannelState) bool {
 	var recoveredC chan struct{}
 	var canAwait bool
 
 	pc.applyControlOperation(func() {
+		var closedChannels map[string]*closedChannelState
+		if channelType == InputChannelType {
+			closedChannels = pc.closedInputChannels
+		} else {
+			closedChannels = pc.closedPriorityChannels
+		}
 		var state *closedChannelState
 		state, canAwait = closedChannels[channelName]
 		if !canAwait {
