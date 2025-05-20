@@ -90,28 +90,13 @@ func doConsume[T any, R any](c *PriorityConsumer[T], fnGetResult func(msg T, det
 			msg, receiveDetails, status := c.priorityChannel.ReceiveWithContextEx(context.Background())
 			channelName := receiveDetails.ChannelName
 
-			if (status == ReceiveChannelClosed && c.closureBehaviour.InputChannelClosureBehavior == PauseOnClosed) ||
-				(status == ReceivePriorityChannelClosed && channelName != "" && c.closureBehaviour.PriorityChannelClosureBehavior == PauseOnClosed) {
-				var channelType ChannelType
-				if status == ReceiveChannelClosed {
-					channelType = InputChannelType
-				} else {
-					channelType = PriorityChannelType
-				}
-				c.setPaused(status.ExitReason(), channelName)
-				if c.priorityChannel.AwaitRecover(context.Background(), channelName, channelType) {
-					c.setResumed()
+			if status != ReceiveSuccess {
+				recoveryResult := tryAwaitRecovery(c.closureBehaviour, c, c.priorityChannel, status, channelName)
+				if recoveryResult == awaitRecoveryNotApplicable {
+					c.setClosed(status.ExitReason(), channelName)
+					return
 				}
 				continue
-			} else if status == ReceiveNoOpenChannels && c.closureBehaviour.NoOpenChannelsBehavior == PauseWhenNoOpenChannels {
-				c.setPaused(status.ExitReason(), channelName)
-				if c.priorityChannel.AwaitOpenChannel(context.Background()) {
-					c.setResumed()
-				}
-				continue
-			} else if status != ReceiveSuccess {
-				c.setClosed(status.ExitReason(), channelName)
-				return
 			}
 
 			select {

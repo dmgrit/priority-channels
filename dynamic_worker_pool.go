@@ -54,26 +54,6 @@ func NewDynamicWorkerPool[T any](ctx context.Context, priorityChannel *PriorityC
 	}, nil
 }
 
-type ChannelClosureBehavior int
-
-const (
-	StopOnClosed ChannelClosureBehavior = iota
-	PauseOnClosed
-)
-
-type NoOpenChannelsBehavior int
-
-const (
-	StopWhenNoOpenChannels NoOpenChannelsBehavior = iota
-	PauseWhenNoOpenChannels
-)
-
-type ClosureBehavior struct {
-	InputChannelClosureBehavior    ChannelClosureBehavior
-	PriorityChannelClosureBehavior ChannelClosureBehavior
-	NoOpenChannelsBehavior         NoOpenChannelsBehavior
-}
-
 func (p *DynamicWorkerPool[T]) Process(processFn func(Delivery[T])) error {
 	fnGetResult := func(msg T, details ReceiveDetails) Delivery[T] {
 		return Delivery[T]{Msg: msg, ReceiveDetails: details}
@@ -110,40 +90,22 @@ func doProcess[T any, R any](p *DynamicWorkerPool[T], fnGetResult func(msg T, de
 				ctx, cancel := context.WithCancel(p.ctx)
 				p.setPendingReceiveContextCancel(cancel)
 				msg, receiveDetails, status := p.priorityChannel.ReceiveWithContextEx(ctx)
-				if status == ReceiveSuccess {
-					go func(sem chan token) {
-						p.activeGoroutines.Add(1)
-						processFn(fnGetResult(msg, receiveDetails))
-						p.activeGoroutines.Add(-1)
-						<-sem
-					}(sem)
-					continue
-				} else if status == ReceivePriorityChannelClosed && receiveDetails.ChannelName == "" {
-					return
-				} else if status != ReceiveContextCancelled {
-					if (status == ReceiveChannelClosed && p.closureBehaviour.InputChannelClosureBehavior == PauseOnClosed) ||
-						(status == ReceivePriorityChannelClosed && p.closureBehaviour.PriorityChannelClosureBehavior == PauseOnClosed) {
-						var channelType ChannelType
-						if status == ReceiveChannelClosed {
-							channelType = InputChannelType
-						} else {
-							channelType = PriorityChannelType
-						}
-						p.setPaused(status.ExitReason(), receiveDetails.ChannelName)
-						if p.priorityChannel.AwaitRecover(context.Background(), receiveDetails.ChannelName, channelType) {
-							p.setResumed()
-						}
-					} else if status == ReceiveNoOpenChannels && p.closureBehaviour.NoOpenChannelsBehavior == PauseWhenNoOpenChannels {
-						p.setPaused(status.ExitReason(), receiveDetails.ChannelName)
-						if p.priorityChannel.AwaitOpenChannel(context.Background()) {
-							p.setResumed()
-						}
-					} else {
+				if status != ReceiveSuccess {
+					<-sem
+					recoveryResult := tryAwaitRecovery(p.closureBehaviour, p, p.priorityChannel, status, receiveDetails.ChannelName)
+					if recoveryResult == awaitRecoveryNotApplicable {
 						p.setPaused(status.ExitReason(), receiveDetails.ChannelName)
 						return
 					}
+					continue
 				}
-				<-sem
+
+				go func(sem chan token) {
+					p.activeGoroutines.Add(1)
+					processFn(fnGetResult(msg, receiveDetails))
+					p.activeGoroutines.Add(-1)
+					<-sem
+				}(sem)
 			}
 		}
 	}()
