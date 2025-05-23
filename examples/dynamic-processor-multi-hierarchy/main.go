@@ -29,12 +29,14 @@ func main() {
 	var inputChannels []chan string
 	var triggerPauseChannels []chan bool
 	var triggerCloseChannels []chan bool
+	var triggerRecoverChannels []chan chan string
 
 	channelsNum := 5
 	for i := 1; i <= channelsNum; i++ {
 		inputChannels = append(inputChannels, make(chan string))
 		triggerPauseChannels = append(triggerPauseChannels, make(chan bool))
 		triggerCloseChannels = append(triggerCloseChannels, make(chan bool))
+		triggerRecoverChannels = append(triggerRecoverChannels, make(chan chan string))
 	}
 	channelsOrder := map[string]int{
 		"Customer A - High Priority": 1,
@@ -106,6 +108,13 @@ func main() {
 		"Customer B - Low Priority":  inputChannels[3],
 		"Urgent Messages":            inputChannels[4],
 	}
+	channelNames := []string{
+		"Customer A - High Priority",
+		"Customer A - Low Priority",
+		"Customer B - High Priority",
+		"Customer B - Low Priority",
+		"Urgent Messages",
+	}
 
 	receivedMsgs := 0
 	byChannelName := make(map[string]int)
@@ -171,38 +180,40 @@ func main() {
 	fmt.Printf("To see the results live, run in another terminal window:\ntail -f %s\n\n", demoFilePath)
 
 	for i := 1; i <= len(inputChannels); i++ {
-		go func(i int) {
+		go func(inputChannel chan string, triggerPauseChannel chan bool, triggerCloseChannel chan bool, triggerRecoverChannel chan chan string) {
 			paused := true
 			closed := false
 			j := 0
 			for {
 				j++
 				select {
-				case b := <-triggerPauseChannels[i-1]:
+				case b := <-triggerPauseChannel:
 					paused = !b
-				case b := <-triggerCloseChannels[i-1]:
+				case b := <-triggerCloseChannel:
 					if b && !closed {
-						close(inputChannels[i-1])
+						close(inputChannel)
 						closed = true
 					}
+				case inputChannel = <-triggerRecoverChannel:
+					closed = false
 				default:
 					if !paused && !closed {
 						select {
-						case b := <-triggerPauseChannels[i-1]:
+						case b := <-triggerPauseChannel:
 							paused = !b
-						case b := <-triggerCloseChannels[i-1]:
+						case b := <-triggerCloseChannel:
 							if b && !closed {
-								close(inputChannels[i-1])
+								close(inputChannel)
 								closed = true
 							}
-						case inputChannels[i-1] <- fmt.Sprintf("message-%d", j):
+						case inputChannel <- fmt.Sprintf("message-%d", j):
 						}
 					} else {
 						time.Sleep(100 * time.Millisecond)
 					}
 				}
 			}
-		}(i)
+		}(inputChannels[i-1], triggerPauseChannels[i-1], triggerCloseChannels[i-1], triggerRecoverChannels[i-1])
 	}
 
 	tickerCh := time.Tick(5 * time.Second)
@@ -309,7 +320,7 @@ func main() {
 			if err != nil || number <= 0 || number > channelsNum {
 				continue
 			}
-			fmt.Printf("Closing Channel %d\n", number)
+			fmt.Printf("Closing Channel '%s'\n", channelNames[number-1])
 			triggerCloseChannels[number-1] <- value
 			continue
 		}
@@ -392,6 +403,18 @@ func main() {
 			newCtx, cancelFunc := context.WithCancel(context.Background())
 			innerPriorityChannelsCancelFuncs["Customer Messages"] = cancelFunc
 			wp.RecoverClosedPriorityChannel("Customer Messages", newCtx)
+		case "R1", "R2", "R3", "R4", "R5":
+			upperLine = strings.TrimPrefix(upperLine, "R")
+			number, err := strconv.Atoi(upperLine)
+			if err != nil || number <= 0 || number > channelsNum {
+				continue
+			}
+			channelIndex := number - 1
+			newChannel := make(chan string)
+			inputChannels[channelIndex] = newChannel
+			wp.RecoverClosedInputChannel(channelNames[channelIndex], newChannel)
+			triggerRecoverChannels[channelIndex] <- newChannel
+			fmt.Printf("Recovering Channel '%s'\n", channelNames[channelIndex])
 		case "D":
 			presentDetails.Store(true)
 			fmt.Printf("Presenting receive path on\n")
