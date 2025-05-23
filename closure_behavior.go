@@ -31,7 +31,7 @@ type awaitRecoveryResult int
 
 const (
 	awaitRecoverySuccess awaitRecoveryResult = iota
-	awaitRecoveryCancelled
+	awaitRecoveryCanceled
 	awaitRecoveryNotApplicable
 )
 
@@ -43,21 +43,21 @@ func tryAwaitRecovery[T any](behaviour ClosureBehavior, pauser pauseAndResumer, 
 			pauser.setResumed()
 			return awaitRecoverySuccess
 		}
-		return awaitRecoveryCancelled
+		return awaitRecoveryCanceled
 	case status == ReceivePriorityChannelClosed && channelName != "" && behaviour.PriorityChannelClosureBehavior == PauseOnClosed:
 		pauser.setPaused(status.ExitReason(), channelName)
 		if priorityChannel.AwaitRecover(context.Background(), channelName, InnerPriorityChannelType) {
 			pauser.setResumed()
 			return awaitRecoverySuccess
 		}
-		return awaitRecoveryCancelled
+		return awaitRecoveryCanceled
 	case status == ReceiveNoOpenChannels && behaviour.NoOpenChannelsBehavior == PauseWhenNoOpenChannels:
 		pauser.setPaused(status.ExitReason(), "")
 		if priorityChannel.AwaitOpenChannel(context.Background()) {
 			pauser.setResumed()
 			return awaitRecoverySuccess
 		}
-		return awaitRecoveryCancelled
+		return awaitRecoveryCanceled
 	default:
 		return awaitRecoveryNotApplicable
 	}
