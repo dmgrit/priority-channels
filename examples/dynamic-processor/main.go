@@ -113,9 +113,9 @@ func main() {
 		receivedMsgsMutex.Unlock()
 	}
 	closureBehavior := priority_channels.ClosureBehavior{
-		InputChannelClosureBehavior:    priority_channels.PauseOnClosed,
-		PriorityChannelClosureBehavior: priority_channels.PauseOnClosed,
-		NoOpenChannelsBehavior:         priority_channels.PauseWhenNoOpenChannels,
+		InputChannelClosureBehavior:         priority_channels.PauseOnClosed,
+		InnerPriorityChannelClosureBehavior: priority_channels.PauseOnClosed,
+		NoOpenChannelsBehavior:              priority_channels.PauseWhenNoOpenChannels,
 	}
 	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, channelNameToChannel, nil, priorityConfig, 3, closureBehavior)
 	if err != nil {

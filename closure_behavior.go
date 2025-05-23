@@ -3,9 +3,9 @@ package priority_channels
 import "context"
 
 type ClosureBehavior struct {
-	InputChannelClosureBehavior    ChannelClosureBehavior
-	PriorityChannelClosureBehavior ChannelClosureBehavior
-	NoOpenChannelsBehavior         NoOpenChannelsBehavior
+	InputChannelClosureBehavior         ChannelClosureBehavior
+	InnerPriorityChannelClosureBehavior ChannelClosureBehavior
+	NoOpenChannelsBehavior              NoOpenChannelsBehavior
 }
 
 type ChannelClosureBehavior int
@@ -44,7 +44,7 @@ func tryAwaitRecovery[T any](behaviour ClosureBehavior, pauser pauseAndResumer, 
 			return awaitRecoverySuccess
 		}
 		return awaitRecoveryCanceled
-	case status == ReceivePriorityChannelClosed && channelName != "" && behaviour.PriorityChannelClosureBehavior == PauseOnClosed:
+	case status == ReceivePriorityChannelClosed && channelName != "" && behaviour.InnerPriorityChannelClosureBehavior == PauseOnClosed:
 		pauser.setPaused(status.ExitReason(), channelName)
 		if priorityChannel.AwaitRecover(context.Background(), channelName, InnerPriorityChannelType) {
 			pauser.setResumed()
