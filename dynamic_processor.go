@@ -64,8 +64,8 @@ func (p *DynamicPriorityProcessor[T]) RecoverClosedInputChannel(channelName stri
 	p.priorityChannel.RecoverClosedInputChannel(channelName, ch)
 }
 
-func (p *DynamicPriorityProcessor[T]) RecoverClosedPriorityChannel(channelName string, ctx context.Context) {
-	p.priorityChannel.RecoverClosedPriorityChannel(channelName, ctx)
+func (p *DynamicPriorityProcessor[T]) RecoverClosedInnerPriorityChannel(channelName string, ctx context.Context) {
+	p.priorityChannel.RecoverClosedInnerPriorityChannel(channelName, ctx)
 }
 
 func (p *DynamicPriorityProcessor[T]) WorkersNum() int {

@@ -387,22 +387,22 @@ func main() {
 			fmt.Printf("Recovering Priority Channel of Customer A\n")
 			newCtx, cancelFunc := context.WithCancel(context.Background())
 			innerPriorityChannelsCancelFuncs["Customer A"] = cancelFunc
-			wp.RecoverClosedPriorityChannel("Customer A", newCtx)
+			wp.RecoverClosedInnerPriorityChannel("Customer A", newCtx)
 		case "RB":
 			fmt.Printf("Recovering Priority Channel of Customer B\n")
 			newCtx, cancelFunc := context.WithCancel(context.Background())
 			innerPriorityChannelsCancelFuncs["Customer B"] = cancelFunc
-			wp.RecoverClosedPriorityChannel("Customer B", newCtx)
+			wp.RecoverClosedInnerPriorityChannel("Customer B", newCtx)
 		case "RU":
 			fmt.Printf("Recovering Priority Channel of Urgent Messages\n")
 			newCtx, cancelFunc := context.WithCancel(context.Background())
 			innerPriorityChannelsCancelFuncs["Urgent Messages"] = cancelFunc
-			wp.RecoverClosedPriorityChannel("Urgent Messages", newCtx)
+			wp.RecoverClosedInnerPriorityChannel("Urgent Messages", newCtx)
 		case "RCC":
 			fmt.Printf("Recovering Combined Priority Channel of Both Customers\n")
 			newCtx, cancelFunc := context.WithCancel(context.Background())
 			innerPriorityChannelsCancelFuncs["Customer Messages"] = cancelFunc
-			wp.RecoverClosedPriorityChannel("Customer Messages", newCtx)
+			wp.RecoverClosedInnerPriorityChannel("Customer Messages", newCtx)
 		case "R1", "R2", "R3", "R4", "R5":
 			upperLine = strings.TrimPrefix(upperLine, "R")
 			number, err := strconv.Atoi(upperLine)

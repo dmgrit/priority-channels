@@ -323,22 +323,22 @@ func main() {
 			fmt.Printf("Recovering Priority Channel of Customer A\n")
 			newCtx, cancelFunc := context.WithCancel(context.Background())
 			priorityChannelsCancelFuncs["Customer A"] = cancelFunc
-			ch.RecoverClosedPriorityChannel("Customer A", newCtx)
+			ch.RecoverClosedInnerPriorityChannel("Customer A", newCtx)
 		case "RB":
 			fmt.Printf("Recovering Priority Channel of Customer B\n")
 			newCtx, cancelFunc := context.WithCancel(context.Background())
 			priorityChannelsCancelFuncs["Customer B"] = cancelFunc
-			ch.RecoverClosedPriorityChannel("Customer B", newCtx)
+			ch.RecoverClosedInnerPriorityChannel("Customer B", newCtx)
 		case "RU":
 			fmt.Printf("Recovering Priority Channel of Urgent Messages\n")
 			newCtx, cancelFunc := context.WithCancel(context.Background())
 			priorityChannelsCancelFuncs["Urgent Messages"] = cancelFunc
-			ch.RecoverClosedPriorityChannel("Urgent Messages", newCtx)
+			ch.RecoverClosedInnerPriorityChannel("Urgent Messages", newCtx)
 		case "RCC":
 			fmt.Printf("Recovering Combined Priority Channel of Both Customers\n")
 			newCtx, cancelFunc := context.WithCancel(context.Background())
 			priorityChannelsCancelFuncs["Customer Messages"] = cancelFunc
-			ch.RecoverClosedPriorityChannel("Customer Messages", newCtx)
+			ch.RecoverClosedInnerPriorityChannel("Customer Messages", newCtx)
 		case "D":
 			presentDetails.Store(true)
 		case "ND":

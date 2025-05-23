@@ -142,7 +142,7 @@ func (c *PriorityConsumer[T]) RecoverClosedInputChannel(channelName string, ch <
 	return nil
 }
 
-func (c *PriorityConsumer[T]) RecoverClosedPriorityChannel(channelName string, ctx context.Context) error {
+func (c *PriorityConsumer[T]) RecoverClosedInnerPriorityChannel(channelName string, ctx context.Context) error {
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
@@ -150,7 +150,7 @@ func (c *PriorityConsumer[T]) RecoverClosedPriorityChannel(channelName string, c
 		return errors.New("cannot recover priority channel after stopping")
 	}
 
-	c.priorityChannel.RecoverClosedPriorityChannel(channelName, ctx)
+	c.priorityChannel.RecoverClosedInnerPriorityChannel(channelName, ctx)
 	return nil
 }
 

@@ -30,7 +30,7 @@ type ChannelType int
 
 const (
 	InputChannelType ChannelType = iota
-	PriorityChannelType
+	InnerPriorityChannelType
 )
 
 type closedChannelState struct {
@@ -198,7 +198,7 @@ func (pc *PriorityChannel[T]) RecoverClosedInputChannel(channelName string, ch <
 	})
 }
 
-func (pc *PriorityChannel[T]) RecoverClosedPriorityChannel(channelName string, ctx context.Context) {
+func (pc *PriorityChannel[T]) RecoverClosedInnerPriorityChannel(channelName string, ctx context.Context) {
 	pc.applyControlOperation(func() {
 		state, ok := pc.closedPriorityChannels[channelName]
 		if !ok {
@@ -335,7 +335,7 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 			channelType = InputChannelType
 			pc.closedInputChannels[channelName] = closedState
 		} else {
-			channelType = PriorityChannelType
+			channelType = InnerPriorityChannelType
 			pc.closedPriorityChannels[channelName] = closedState
 		}
 		pc.notifyClosedChannelSubscribers(channelName, channelType, pathInTree)
