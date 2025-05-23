@@ -46,7 +46,11 @@ func (oc *overrideCompositeChannelName[T]) NextSelectCases(upto int) ([]selectab
 	default:
 		res, allSelected, closedChannel := oc.channel.NextSelectCases(upto)
 		if closedChannel != nil {
-			closedChannel.PathInTree[len(closedChannel.PathInTree)-1].ChannelName = oc.name
+			if len(closedChannel.PathInTree) > 0 {
+				closedChannel.PathInTree[len(closedChannel.PathInTree)-1].ChannelName = oc.name
+			} else {
+				closedChannel.ChannelName = oc.name
+			}
 			return res, allSelected, closedChannel
 		}
 		for i, sc := range res {

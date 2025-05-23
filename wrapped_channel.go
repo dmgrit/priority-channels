@@ -15,7 +15,6 @@ func WrapAsPriorityChannel[T any](ctx context.Context, channelName string, msgsC
 		option(pcOptions)
 	}
 	compositeChannel := &wrappedChannel[T]{
-		ctx:                        ctx,
 		channelName:                channelName,
 		msgsC:                      msgsC,
 		autoDisableOnClosedChannel: pcOptions.autoDisableClosedChannels,
@@ -24,7 +23,6 @@ func WrapAsPriorityChannel[T any](ctx context.Context, channelName string, msgsC
 }
 
 type wrappedChannel[T any] struct {
-	ctx                        context.Context
 	channelName                string
 	msgsC                      <-chan T
 	autoDisableOnClosedChannel bool
@@ -36,23 +34,15 @@ func (w *wrappedChannel[T]) ChannelName() string {
 }
 
 func (w *wrappedChannel[T]) NextSelectCases(upto int) (selectCases []selectable.SelectCase[T], isLastIteration bool, closedChannel *selectable.ClosedChannelDetails) {
-	select {
-	case <-w.ctx.Done():
-		return nil, true, &selectable.ClosedChannelDetails{
-			ChannelName: "",
-			PathInTree:  nil,
-		}
-	default:
-		if w.disabled {
-			return nil, true, nil
-		}
-		return []selectable.SelectCase[T]{
-			{
-				ChannelName: w.channelName,
-				MsgsC:       w.msgsC,
-			},
-		}, true, nil
+	if w.disabled {
+		return nil, true, nil
 	}
+	return []selectable.SelectCase[T]{
+		{
+			ChannelName: w.channelName,
+			MsgsC:       w.msgsC,
+		},
+	}, true, nil
 }
 
 func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode, recvOK bool) {
