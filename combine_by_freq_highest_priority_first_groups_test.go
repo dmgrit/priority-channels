@@ -277,7 +277,7 @@ func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_ExitOnDefaultC
 	}
 }
 
-func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_RequestContextCancelled(t *testing.T) {
+func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_RequestContextCanceled(t *testing.T) {
 	ctx := context.Background()
 	payingCustomerHighPriorityC := make(chan string)
 	payingCustomerLowPriorityC := make(chan string)
@@ -331,8 +331,8 @@ func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_RequestContext
 	cancel()
 
 	message, channelName, status := ch.ReceiveWithContext(ctxWithCancel)
-	if status != priority_channels.ReceiveContextCancelled {
-		t.Errorf("Expected status ReceiveContextCancelled (%d), but got %d", priority_channels.ReceiveContextCancelled, status)
+	if status != priority_channels.ReceiveContextCanceled {
+		t.Errorf("Expected status ReceiveContextCanceled (%d), but got %d", priority_channels.ReceiveContextCanceled, status)
 	}
 	if channelName != "" {
 		t.Errorf("Expected empty channel name, but got %s", channelName)
@@ -342,7 +342,7 @@ func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_RequestContext
 	}
 }
 
-func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_PriorityChannelContextCancelled(t *testing.T) {
+func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_PriorityChannelContextCanceled(t *testing.T) {
 	ctx := context.Background()
 	payingCustomerHighPriorityC := make(chan string)
 	payingCustomerLowPriorityC := make(chan string)
@@ -408,7 +408,7 @@ func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_PriorityChanne
 	}
 }
 
-func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_InnerPriorityChannelContextCancelled(t *testing.T) {
+func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_InnerPriorityChannelContextCanceled(t *testing.T) {
 	ctx := context.Background()
 	ctxWithCancel, cancel := context.WithCancel(context.Background())
 	cancel()

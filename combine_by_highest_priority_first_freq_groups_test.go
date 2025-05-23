@@ -384,7 +384,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_ExitOnDefaultCase(
 	}
 }
 
-func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_RequestContextCancelled(t *testing.T) {
+func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_RequestContextCanceled(t *testing.T) {
 	ctx := context.Background()
 	payingCustomerHighPriorityC := make(chan string)
 	payingCustomerLowPriorityC := make(chan string)
@@ -436,8 +436,8 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_RequestContextCanc
 	cancel()
 
 	message, channelName, status := ch.ReceiveWithContext(ctxWithCancel)
-	if status != priority_channels.ReceiveContextCancelled {
-		t.Errorf("Expected status ReceiveContextCancelled (%d), but got %d", priority_channels.ReceiveContextCancelled, status)
+	if status != priority_channels.ReceiveContextCanceled {
+		t.Errorf("Expected status ReceiveContextCanceled (%d), but got %d", priority_channels.ReceiveContextCanceled, status)
 	}
 	if channelName != "" {
 		t.Errorf("Expected empty channel name, but got %s", channelName)
@@ -447,7 +447,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_RequestContextCanc
 	}
 }
 
-func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_PriorityChannelContextCancelled(t *testing.T) {
+func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_PriorityChannelContextCanceled(t *testing.T) {
 	ctx := context.Background()
 	payingCustomerHighPriorityC := make(chan string)
 	payingCustomerLowPriorityC := make(chan string)
@@ -510,7 +510,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_PriorityChannelCon
 	}
 }
 
-func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_InnerPriorityChannelContextCancelled(t *testing.T) {
+func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_InnerPriorityChannelContextCanceled(t *testing.T) {
 	ctx := context.Background()
 	ctxWithCancel, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -574,7 +574,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_InnerPriorityChann
 	}
 }
 
-func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_DeepHierarchy_InnerPriorityChannelContextCancelled(t *testing.T) {
+func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_DeepHierarchy_InnerPriorityChannelContextCanceled(t *testing.T) {
 	ctx := context.Background()
 	ctxWithCancel, cancel := context.WithCancel(context.Background())
 	cancel()

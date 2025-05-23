@@ -549,7 +549,7 @@ func TestProcessMessagesByFrequencyRatioWithGoroutines(t *testing.T) {
 			}
 			processingContextCanceled := make(chan struct{})
 			onProcessingFinished := func(reason pc.ExitReason) {
-				if reason == pc.ContextCancelled {
+				if reason == pc.ContextCanceled {
 					processingContextCanceled <- struct{}{}
 				} else {
 					t.Errorf("Unexpected processing finished reason: %v", reason)
@@ -565,7 +565,7 @@ func TestProcessMessagesByFrequencyRatioWithGoroutines(t *testing.T) {
 
 			select {
 			case <-time.After(10 * time.Second):
-				t.Fatalf("Timeout waiting for ReceiveContextCancelled status")
+				t.Fatalf("Timeout waiting for ReceiveContextCanceled status")
 			case <-processingContextCanceled:
 			}
 
@@ -1615,7 +1615,7 @@ func TestProcessMessagesByFrequencyRatio_ExitOnDefaultCase(t *testing.T) {
 	}
 }
 
-func TestProcessMessagesByFrequencyRatio_RequestContextCancelled(t *testing.T) {
+func TestProcessMessagesByFrequencyRatio_RequestContextCanceled(t *testing.T) {
 	highPriorityC := make(chan string)
 	normalPriorityC := make(chan string)
 	lowPriorityC := make(chan string)
@@ -1644,8 +1644,8 @@ func TestProcessMessagesByFrequencyRatio_RequestContextCancelled(t *testing.T) {
 	cancel()
 
 	message, channelName, status := ch.ReceiveWithContext(ctx)
-	if status != pc.ReceiveContextCancelled {
-		t.Errorf("Expected status ReceiveContextCancelled (%d), but got %d", pc.ReceiveContextCancelled, status)
+	if status != pc.ReceiveContextCanceled {
+		t.Errorf("Expected status ReceiveContextCanceled (%d), but got %d", pc.ReceiveContextCanceled, status)
 	}
 	if channelName != "" {
 		t.Errorf("Expected empty channel name, but got %s", channelName)
@@ -1655,7 +1655,7 @@ func TestProcessMessagesByFrequencyRatio_RequestContextCancelled(t *testing.T) {
 	}
 }
 
-func TestProcessMessagesByFrequencyRatio_PriorityChannelContextCancelled(t *testing.T) {
+func TestProcessMessagesByFrequencyRatio_PriorityChannelContextCanceled(t *testing.T) {
 	highPriorityC := make(chan string)
 	normalPriorityC := make(chan string)
 	lowPriorityC := make(chan string)

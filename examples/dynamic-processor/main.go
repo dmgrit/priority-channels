@@ -170,8 +170,8 @@ func main() {
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool stopped: Priority Channel '%s' closed\n", channelName))
 						case priority_channels.NoOpenChannels:
 							_, _ = f.WriteString("Worker pool stopped: No open channels\n")
-						case priority_channels.ContextCancelled:
-							_, _ = f.WriteString("Worker pool stopped: Context cancelled\n")
+						case priority_channels.ContextCanceled:
+							_, _ = f.WriteString("Worker pool stopped: Context Canceled\n")
 						}
 					}
 				}

@@ -619,7 +619,7 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_ExitOnDefaultCase(t *te
 	}
 }
 
-func TestProcessMessagesByPriorityWithHighestAlwaysFirst_RequestContextCancelled(t *testing.T) {
+func TestProcessMessagesByPriorityWithHighestAlwaysFirst_RequestContextCanceled(t *testing.T) {
 	urgentC := make(chan string)
 	normalC := make(chan string)
 	lowPriorityC := make(chan string)
@@ -648,8 +648,8 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_RequestContextCancelled
 	cancel()
 
 	message, channelName, status := ch.ReceiveWithContext(ctx)
-	if status != pc.ReceiveContextCancelled {
-		t.Errorf("Expected status ReceiveContextCancelled (%d), but got %d", pc.ReceiveContextCancelled, status)
+	if status != pc.ReceiveContextCanceled {
+		t.Errorf("Expected status ReceiveContextCanceled (%d), but got %d", pc.ReceiveContextCanceled, status)
 	}
 	if channelName != "" {
 		t.Errorf("Expected empty channel name, but got %s", channelName)
@@ -659,7 +659,7 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_RequestContextCancelled
 	}
 }
 
-func TestProcessMessagesByPriorityWithHighestAlwaysFirst_PriorityChannelContextCancelled(t *testing.T) {
+func TestProcessMessagesByPriorityWithHighestAlwaysFirst_PriorityChannelContextCanceled(t *testing.T) {
 	urgentC := make(chan string)
 	normalC := make(chan string)
 	lowPriorityC := make(chan string)

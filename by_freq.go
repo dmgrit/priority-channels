@@ -75,7 +75,7 @@ func ProcessByFrequencyRatioWithGoroutines[T any](ctx context.Context,
 		select {
 		case <-ctx.Done():
 			if onProcessingFinished != nil {
-				onProcessingFinished(ContextCancelled)
+				onProcessingFinished(ContextCanceled)
 			}
 			return
 		default:

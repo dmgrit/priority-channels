@@ -96,7 +96,7 @@ onChannelClosed := func(channelName string) {
 }
 
 onProcessingFinished := func(reason priority_channels.ExitReason) {
-    if reason == priority_channels.ContextCancelled || 
+    if reason == priority_channels.ContextCanceled || 
         reason == priority_channels.NoOpenChannels {
         fmt.Printf("Processing has finished, reason %v\n", reason)
     } else {
@@ -604,7 +604,7 @@ It takes the following properties from the select statement:
 - It receives messages from a list of input channels
 - Messages are received atomically - each `Receive` call gets exactly one message from one specific channel at a time, no more messages are read from any channel.
 - Receive with default case is supported - if no messages are available, `ReceiveDefaultCase` is returned.
-- Receive with context is supported - Receive call can have a context, and if the context is canceled, `ReceiveContextCancelled` is returned.
+- Receive with context is supported - Receive call can have a context, and if the context is canceled, `ReceiveContextCanceled` is returned.
 - The default behaviour, once any of the input channels is closed, is that any further `Receive` call will return immediately
   with `ReceiveChannelClosed` for that channel.
 

@@ -66,7 +66,7 @@ func (pc *PriorityChannel[T]) ReceiveWithContextEx(ctx context.Context) (msg T, 
 	if pc.lock != nil {
 		gotLock := pc.lock.TryLockWithContext(ctx)
 		if !gotLock {
-			return getZero[T](), ReceiveDetails{}, ReceiveContextCancelled
+			return getZero[T](), ReceiveDetails{}, ReceiveContextCanceled
 		}
 		defer pc.lock.Unlock()
 	}
@@ -98,7 +98,7 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 	case <-pc.ctx.Done():
 		return getZero[T](), ReceiveDetails{}, ReceivePriorityChannelClosed
 	case <-ctx.Done():
-		return getZero[T](), ReceiveDetails{}, ReceiveContextCancelled
+		return getZero[T](), ReceiveDetails{}, ReceiveContextCanceled
 	default:
 	}
 	msg, channelName, pathInTree, status := pc.doReceiveSingleMessage(ctx, withDefaultCase)
@@ -232,7 +232,7 @@ func (pc *PriorityChannel[T]) selectCasesOfNextIteration(
 		return chosen, recv, recvOk, ReceivePriorityChannelClosed
 	case 1:
 		// context of the specific request is done
-		return chosen, recv, recvOk, ReceiveContextCancelled
+		return chosen, recv, recvOk, ReceiveContextCanceled
 
 	case len(selectCases) - 1:
 		if !isLastIteration {
