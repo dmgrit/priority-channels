@@ -8,13 +8,13 @@ import (
 type ReceiveStatus int
 
 const (
-	ReceiveSuccess ReceiveStatus = iota
+	ReceiveStatusUnknown ReceiveStatus = iota
+	ReceiveSuccess
 	ReceiveContextCanceled
 	ReceiveDefaultCase
 	ReceiveChannelClosed
 	ReceivePriorityChannelClosed
 	ReceiveNoOpenChannels
-	ReceiveStatusUnknown
 )
 
 func (r ReceiveStatus) ExitReason() ExitReason {
