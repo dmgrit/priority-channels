@@ -101,6 +101,10 @@ func main() {
 		},
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "-a" {
+		setAutoDisabledPriorityChannelConfig(priorityConfig.PriorityChannel)
+	}
+
 	channelNameToChannel := map[string]<-chan string{
 		"Customer A - High Priority": inputChannels[0],
 		"Customer A - Low Priority":  inputChannels[1],
@@ -446,4 +450,16 @@ func generateInnerPriorityChannelsContextsAndCancelFuncs() (map[string]context.C
 		priorityChannelsCancelFuncs[channelName] = cancel
 	}
 	return priorityChannelsContexts, priorityChannelsCancelFuncs
+}
+
+func setAutoDisabledPriorityChannelConfig(config *priority_channels.PriorityChannelConfig) {
+	if config == nil {
+		return
+	}
+	config.AutoDisableClosedChannels = true
+	for _, channel := range config.Channels {
+		if channel.PriorityChannelConfig != nil {
+			setAutoDisabledPriorityChannelConfig(channel.PriorityChannelConfig)
+		}
+	}
 }
