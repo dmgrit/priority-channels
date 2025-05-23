@@ -23,7 +23,7 @@ type DynamicWorkerPool[T any] struct {
 	done                           chan struct{}
 	restartFromStoppedStateTracker *synchronization.RepeatingStateTracker
 	priorityChannelUpdatesMtx      sync.Mutex
-	isStopped                      bool
+	status                         ProcessingStatus
 	exitReason                     ExitReason
 	exitReasonChannelName          string
 	closureBehaviour               ClosureBehavior
@@ -94,7 +94,7 @@ func doProcess[T any, R any](p *DynamicWorkerPool[T], fnGetResult func(msg T, de
 					<-sem
 					recoveryResult := tryAwaitRecovery(p.closureBehaviour, p, p.priorityChannel, status, receiveDetails.ChannelName)
 					if recoveryResult == awaitRecoveryNotApplicable {
-						p.setPaused(status.ExitReason(), receiveDetails.ChannelName)
+						p.setClosed(status.ExitReason(), receiveDetails.ChannelName)
 						return
 					}
 					continue
@@ -201,23 +201,32 @@ func (p *DynamicWorkerPool[T]) ActiveWorkersNum() int {
 
 // Status returns whether the consumer is stopped, and if so, the reason for stopping and,
 // in case the reason is a closed channel, the name of the channel that was closed.
-func (p *DynamicWorkerPool[T]) Status() (stopped bool, reason ExitReason, channelName string) {
+func (p *DynamicWorkerPool[T]) Status() (status ProcessingStatus, reason ExitReason, channelName string) {
 	p.priorityChannelUpdatesMtx.Lock()
 	defer p.priorityChannelUpdatesMtx.Unlock()
 
 	select {
 	case <-p.Done():
-		return true, PriorityChannelClosed, ""
+		return Stopped, PriorityChannelClosed, ""
 	default:
-		return p.isStopped, p.exitReason, p.exitReasonChannelName
+		return p.status, p.exitReason, p.exitReasonChannelName
 	}
+}
+
+func (p *DynamicWorkerPool[T]) setClosed(exitReason ExitReason, exitReasonChannelName string) {
+	p.priorityChannelUpdatesMtx.Lock()
+	defer p.priorityChannelUpdatesMtx.Unlock()
+
+	p.status = Stopped
+	p.exitReason = exitReason
+	p.exitReasonChannelName = exitReasonChannelName
 }
 
 func (p *DynamicWorkerPool[T]) setPaused(exitReason ExitReason, exitReasonChannelName string) {
 	p.priorityChannelUpdatesMtx.Lock()
 	defer p.priorityChannelUpdatesMtx.Unlock()
 
-	p.isStopped = true
+	p.status = Paused
 	p.exitReason = exitReason
 	p.exitReasonChannelName = exitReasonChannelName
 }
@@ -226,7 +235,7 @@ func (p *DynamicWorkerPool[T]) setResumed() {
 	p.priorityChannelUpdatesMtx.Lock()
 	defer p.priorityChannelUpdatesMtx.Unlock()
 
-	p.isStopped = false
+	p.status = Running
 	p.exitReason = UnknownExitReason
 	p.exitReasonChannelName = ""
 }

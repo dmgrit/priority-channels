@@ -215,10 +215,10 @@ func (pc *PriorityChannel[T]) RecoverClosedPriorityChannel(channelName string, c
 	})
 }
 
-func (pc *PriorityChannel[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration) error {
+func (pc *PriorityChannel[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration, innerPriorityChannelsContexts map[string]context.Context) error {
 	var resErr error
 	pc.applyControlOperation(func() {
-		priorityChannel, err := NewFromConfiguration(pc.ctx, priorityConfiguration, pc.channelNameToChannel)
+		priorityChannel, err := NewFromConfiguration(pc.ctx, priorityConfiguration, pc.channelNameToChannel, innerPriorityChannelsContexts)
 		if err != nil {
 			resErr = err
 			return

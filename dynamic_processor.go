@@ -12,10 +12,11 @@ type DynamicPriorityProcessor[T any] struct {
 func NewDynamicPriorityProcessor[T any](
 	ctx context.Context,
 	channelNameToChannel map[string]<-chan T,
+	innerPriorityChannelsContexts map[string]context.Context,
 	priorityConfiguration Configuration,
 	workersNum int,
 	closureBehaviour ClosureBehavior) (*DynamicPriorityProcessor[T], error) {
-	priorityChannel, err := NewFromConfiguration(ctx, priorityConfiguration, channelNameToChannel)
+	priorityChannel, err := NewFromConfiguration(ctx, priorityConfiguration, channelNameToChannel, innerPriorityChannelsContexts)
 	if err != nil {
 		return nil, err
 	}
@@ -55,8 +56,8 @@ func (p *DynamicPriorityProcessor[T]) Done() <-chan struct{} {
 	return p.workerPool.Done()
 }
 
-func (p *DynamicPriorityProcessor[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration) error {
-	return p.priorityChannel.UpdatePriorityConfiguration(priorityConfiguration)
+func (p *DynamicPriorityProcessor[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration, innerPriorityChannelsContexts map[string]context.Context) error {
+	return p.priorityChannel.UpdatePriorityConfiguration(priorityConfiguration, innerPriorityChannelsContexts)
 }
 
 func (p *DynamicPriorityProcessor[T]) RecoverClosedInputChannel(channelName string, ch <-chan T) {
@@ -79,6 +80,6 @@ func (p *DynamicPriorityProcessor[T]) ActiveWorkersNum() int {
 	return p.workerPool.ActiveWorkersNum()
 }
 
-func (p *DynamicPriorityProcessor[T]) Status() (stopped bool, reason ExitReason, channelName string) {
+func (p *DynamicPriorityProcessor[T]) Status() (stopped ProcessingStatus, reason ExitReason, channelName string) {
 	return p.workerPool.Status()
 }

@@ -117,7 +117,7 @@ func main() {
 		PriorityChannelClosureBehavior: priority_channels.PauseOnClosed,
 		NoOpenChannelsBehavior:         priority_channels.PauseWhenNoOpenChannels,
 	}
-	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, channelNameToChannel, priorityConfig, 3, closureBehavior)
+	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, channelNameToChannel, nil, priorityConfig, 3, closureBehavior)
 	if err != nil {
 		fmt.Printf("failed to initialize dynamic priority processor: %v\n", err)
 		os.Exit(1)
@@ -185,19 +185,25 @@ func main() {
 					}
 				} else {
 					_, _ = f.WriteString("No messages received in the last 5 seconds\n")
-					stopped, reason, channelName := wp.Status()
-					if stopped {
+					status, reason, channelName := wp.Status()
+					if status != priority_channels.Running {
+						var state string
+						if status == priority_channels.Stopped {
+							state = "stopped"
+						} else {
+							state = "paused"
+						}
 						switch reason {
 						case priority_channels.UnknownExitReason:
-							_, _ = f.WriteString("Worker pool stopped: Unknown reason\n")
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Unknown reason\n", state))
 						case priority_channels.ChannelClosed:
-							_, _ = f.WriteString(fmt.Sprintf("Worker pool stopped: Channel '%s' closed\n", channelName))
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Channel '%s' closed\n", state, channelName))
 						case priority_channels.PriorityChannelClosed:
-							_, _ = f.WriteString(fmt.Sprintf("Worker pool stopped: Priority Channel '%s' closed\n", channelName))
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Priority Channel '%s' closed\n", state, channelName))
 						case priority_channels.NoOpenChannels:
-							_, _ = f.WriteString("Worker pool stopped: No open channels\n")
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: No open channels\n", state))
 						case priority_channels.ContextCanceled:
-							_, _ = f.WriteString("Worker pool stopped: Context Canceled\n")
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Context canceled\n", state))
 						}
 					}
 				}
@@ -297,7 +303,7 @@ func main() {
 				continue
 			}
 
-			if err := wp.UpdatePriorityConfiguration(priorityConfig); err != nil {
+			if err := wp.UpdatePriorityConfiguration(priorityConfig, nil); err != nil {
 				fmt.Printf("failed to update priority consumer configuration: %v\n", err)
 				continue
 			}
