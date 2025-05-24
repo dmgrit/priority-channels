@@ -92,6 +92,9 @@ func doProcess[T any, R any](p *DynamicWorkerPool[T], fnGetResult func(msg T, de
 				msg, receiveDetails, status := p.priorityChannel.ReceiveWithContextEx(ctx)
 				if status != ReceiveSuccess {
 					<-sem
+					if status == ReceiveContextCanceled {
+						continue
+					}
 					recoveryResult := tryAwaitRecovery(p.closureBehaviour, p, p.priorityChannel, status, receiveDetails.ChannelName)
 					if recoveryResult == awaitRecoveryNotApplicable {
 						p.setClosed(status.ExitReason(), receiveDetails.ChannelName)
