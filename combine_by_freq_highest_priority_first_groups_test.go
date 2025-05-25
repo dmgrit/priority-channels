@@ -465,8 +465,8 @@ func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups_InnerPriorityC
 	}
 
 	message, channelName, status := ch.ReceiveWithContext(ctx)
-	if status != priority_channels.ReceivePriorityChannelClosed {
-		t.Errorf("Expected status ReceivePriorityChannelClosed (%d), but got %d", priority_channels.ReceivePriorityChannelClosed, status)
+	if status != priority_channels.ReceiveInnerPriorityChannelClosed {
+		t.Errorf("Expected status ReceiveInnerPriorityChannelClosed (%d), but got %d", priority_channels.ReceiveInnerPriorityChannelClosed, status)
 	}
 	if channelName != "Paying Customer" {
 		t.Errorf("Expected channel name 'Paying Customer', but got %s", channelName)

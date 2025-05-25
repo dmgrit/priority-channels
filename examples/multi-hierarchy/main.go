@@ -192,13 +192,15 @@ func main() {
 					cancel()
 					break
 				}
-			} else if status == priority_channels.ReceivePriorityChannelClosed {
-				var err error
-				if fullChannelPath == "" {
-					_, err = f.WriteString(fmt.Sprintf("Priority Channel is closed\n"))
-				} else {
-					_, err = f.WriteString(fmt.Sprintf("Priority Channel '%s' is closed\n", fullChannelPath))
+			} else if status == priority_channels.ReceiveInnerPriorityChannelClosed {
+				_, err = f.WriteString(fmt.Sprintf("Inner Priority Channel '%s' is closed\n", fullChannelPath))
+				if err != nil {
+					fmt.Printf("Failed to write to file: %v\n", err)
+					cancel()
+					break
 				}
+			} else if status == priority_channels.ReceivePriorityChannelClosed {
+				_, err = f.WriteString(fmt.Sprintf("Priority Channel is closed\n"))
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)
 					cancel()
@@ -222,7 +224,7 @@ func main() {
 
 			if status != priority_channels.ReceiveSuccess &&
 				status != priority_channels.ReceiveChannelClosed &&
-				(status != priority_channels.ReceivePriorityChannelClosed || fullChannelPath == "") {
+				status != priority_channels.ReceiveInnerPriorityChannelClosed {
 				_, err := f.WriteString("Exiting\n")
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)

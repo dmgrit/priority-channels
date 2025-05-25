@@ -44,7 +44,7 @@ func tryAwaitRecovery[T any](behaviour ClosureBehavior, pauser pauseAndResumer, 
 			return awaitRecoverySuccess
 		}
 		return awaitRecoveryCanceled
-	case status == ReceivePriorityChannelClosed && channelName != "" && behaviour.InnerPriorityChannelClosureBehavior == PauseOnClosed:
+	case status == ReceiveInnerPriorityChannelClosed && behaviour.InnerPriorityChannelClosureBehavior == PauseOnClosed:
 		pauser.setPaused(status.ExitReason(), channelName)
 		if priorityChannel.AwaitRecover(context.Background(), channelName, InnerPriorityChannelType) {
 			pauser.setResumed()

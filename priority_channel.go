@@ -335,7 +335,7 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 	default:
 	}
 	msg, channelName, pathInTree, status := pc.doReceiveSingleMessage(ctx, withDefaultCase)
-	for (status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed) && channelName != "" {
+	for status == ReceiveChannelClosed || status == ReceiveInnerPriorityChannelClosed {
 		pc.compositeChannel.UpdateOnCaseSelected(pathInTree, false)
 		closedState := &closedChannelState{
 			pathInTree: pathInTree,
@@ -352,7 +352,7 @@ func (pc *PriorityChannel[T]) receiveSingleMessage(ctx context.Context, withDefa
 		pc.notifyClosedChannelSubscribers(channelName, channelType, pathInTree)
 		prevChannelName := channelName
 		msg, channelName, pathInTree, status = pc.doReceiveSingleMessage(ctx, withDefaultCase)
-		if channelName == prevChannelName && (status == ReceiveChannelClosed || status == ReceivePriorityChannelClosed) {
+		if channelName == prevChannelName && (status == ReceiveChannelClosed || status == ReceiveInnerPriorityChannelClosed) {
 			// same channel still returned as closed
 			break
 		}
@@ -443,7 +443,7 @@ func (pc *PriorityChannel[T]) doReceiveSingleMessage(ctx context.Context, withDe
 	for {
 		channelsSelectCases, isLastIteration, closedChannel := pc.compositeChannel.NextSelectCases(nextNumOfChannelsToProcess)
 		if closedChannel != nil {
-			return getZero[T](), closedChannel.ChannelName, closedChannel.PathInTree, ReceivePriorityChannelClosed
+			return getZero[T](), closedChannel.ChannelName, closedChannel.PathInTree, ReceiveInnerPriorityChannelClosed
 		}
 		if len(channelsSelectCases) == 0 {
 			if isLastIteration {

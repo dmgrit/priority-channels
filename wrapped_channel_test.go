@@ -136,9 +136,9 @@ func TestCombinedWrappedChannelClosed(t *testing.T) {
 	}
 
 	_, channelName, status := ch.ReceiveWithContext(context.Background())
-	if status != priority_channels.ReceivePriorityChannelClosed {
-		t.Errorf("Expected status ReceivePriorityChannelClosed (%v), but got %v",
-			priority_channels.ReceivePriorityChannelClosed, status)
+	if status != priority_channels.ReceiveInnerPriorityChannelClosed {
+		t.Errorf("Expected status ReceiveInnerPriorityChannelClosed (%v), but got %v",
+			priority_channels.ReceiveInnerPriorityChannelClosed, status)
 	}
 	if channelName != "wrapped-channel-1" {
 		t.Errorf("Expected empty priority channel name 'wrapped_channel-1', but got %s", channelName)
