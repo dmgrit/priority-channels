@@ -37,15 +37,15 @@ func (c *channelWithWeight[T, W]) RecoverClosedInputChannel(ch <-chan T, pathInT
 	c.msgsC = ch
 }
 
-func (c *channelWithWeight[T, W]) RecoverClosedPriorityChannel(ctx context.Context, pathInTree []ChannelNode) {
+func (c *channelWithWeight[T, W]) RecoverClosedInnerPriorityChannel(ctx context.Context, pathInTree []ChannelNode) {
 	// this should never be called
 }
 
-func (c *channelWithWeight[T, W]) GetInputChannels(m map[string]<-chan T) error {
-	if _, ok := m[c.channelName]; ok {
+func (c *channelWithWeight[T, W]) GetInputAndInnerPriorityChannels(inputChannels map[string]<-chan T, innerPriorityChannels map[string]context.Context) error {
+	if _, ok := inputChannels[c.channelName]; ok {
 		return fmt.Errorf("channel name '%s' is used more than once", c.channelName)
 	}
-	m[c.channelName] = c.msgsC
+	inputChannels[c.channelName] = c.msgsC
 	return nil
 }
 

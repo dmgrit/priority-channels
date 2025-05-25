@@ -2,6 +2,7 @@ package priority_channels
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
 )
@@ -81,16 +82,20 @@ func (oc *overrideCompositeChannelName[T]) RecoverClosedInputChannel(ch <-chan T
 	oc.channel.RecoverClosedInputChannel(ch, pathInTree)
 }
 
-func (oc *overrideCompositeChannelName[T]) RecoverClosedPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
+func (oc *overrideCompositeChannelName[T]) RecoverClosedInnerPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
 	if len(pathInTree) == 0 {
 		oc.ctx = ctx
 		return
 	}
-	oc.channel.RecoverClosedPriorityChannel(ctx, pathInTree)
+	oc.channel.RecoverClosedInnerPriorityChannel(ctx, pathInTree)
 }
 
-func (oc *overrideCompositeChannelName[T]) GetInputChannels(m map[string]<-chan T) error {
-	return oc.channel.GetInputChannels(m)
+func (oc *overrideCompositeChannelName[T]) GetInputAndInnerPriorityChannels(inputChannels map[string]<-chan T, innerPriorityChannels map[string]context.Context) error {
+	if _, ok := innerPriorityChannels[oc.name]; ok {
+		return fmt.Errorf("priority channel name '%s' is used more than once", oc.name)
+	}
+	innerPriorityChannels[oc.name] = oc.ctx
+	return oc.channel.GetInputAndInnerPriorityChannels(inputChannels, innerPriorityChannels)
 }
 
 func (oc *overrideCompositeChannelName[T]) GetInputChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {

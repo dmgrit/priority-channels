@@ -43,7 +43,8 @@ func newByStrategy[T any, W any](ctx context.Context,
 		return nil, err
 	}
 	channelNameToChannel := make(map[string]<-chan T)
-	if err := compositeChannel.GetInputChannels(channelNameToChannel); err != nil {
+	innerPriorityChannelsContexts := make(map[string]context.Context)
+	if err := compositeChannel.GetInputAndInnerPriorityChannels(channelNameToChannel, innerPriorityChannelsContexts); err != nil {
 		return nil, err
 	}
 	return newPriorityChannel(ctx, compositeChannel, channelNameToChannel, options...), nil
@@ -166,9 +167,9 @@ func (c *compositeChannelByPrioritization[T, W]) RecoverClosedInputChannel(ch <-
 	c.doRecoverClosedChannel(recoverFn, pathInTree)
 }
 
-func (c *compositeChannelByPrioritization[T, W]) RecoverClosedPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
+func (c *compositeChannelByPrioritization[T, W]) RecoverClosedInnerPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
 	recoverFn := func(selectedChannel selectable.ChannelWithWeight[T, W], pathInTree []selectable.ChannelNode) {
-		selectedChannel.RecoverClosedPriorityChannel(ctx, pathInTree)
+		selectedChannel.RecoverClosedInnerPriorityChannel(ctx, pathInTree)
 	}
 	c.doRecoverClosedChannel(recoverFn, pathInTree)
 }
@@ -187,9 +188,9 @@ func (c *compositeChannelByPrioritization[T, W]) doRecoverClosedChannel(recoverF
 	recoverFn(selectedChannel, pathInTree[:len(pathInTree)-1])
 }
 
-func (c *compositeChannelByPrioritization[T, W]) GetInputChannels(m map[string]<-chan T) error {
+func (c *compositeChannelByPrioritization[T, W]) GetInputAndInnerPriorityChannels(inputChannels map[string]<-chan T, innerPriorityChannels map[string]context.Context) error {
 	for _, ch := range c.channels {
-		if err := ch.GetInputChannels(m); err != nil {
+		if err := ch.GetInputAndInnerPriorityChannels(inputChannels, innerPriorityChannels); err != nil {
 			return err
 		}
 	}

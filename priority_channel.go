@@ -213,7 +213,7 @@ func (pc *PriorityChannel[T]) RecoverClosedInnerPriorityChannel(channelName stri
 		if !ok {
 			return
 		}
-		pc.compositeChannel.RecoverClosedPriorityChannel(ctx, state.pathInTree)
+		pc.compositeChannel.RecoverClosedInnerPriorityChannel(ctx, state.pathInTree)
 		delete(pc.closedPriorityChannels, channelName)
 		close(state.recoveredC)
 

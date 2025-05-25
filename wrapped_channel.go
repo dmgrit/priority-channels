@@ -61,14 +61,14 @@ func (c *wrappedChannel[T]) RecoverClosedInputChannel(ch <-chan T, pathInTree []
 	c.msgsC = ch
 }
 
-func (c *wrappedChannel[T]) RecoverClosedPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
+func (c *wrappedChannel[T]) RecoverClosedInnerPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
 }
 
-func (c *wrappedChannel[T]) GetInputChannels(m map[string]<-chan T) error {
-	if _, ok := m[c.channelName]; ok {
+func (c *wrappedChannel[T]) GetInputAndInnerPriorityChannels(inputChannels map[string]<-chan T, innerPriorityChannels map[string]context.Context) error {
+	if _, ok := inputChannels[c.channelName]; ok {
 		return &DuplicateChannelError{ChannelName: c.channelName}
 	}
-	m[c.channelName] = c.msgsC
+	inputChannels[c.channelName] = c.msgsC
 	return nil
 }
 
