@@ -32,8 +32,8 @@ func TestWrappedClosedChannel(t *testing.T) {
 	close(msgsC)
 
 	_, channelName, status := wrappedChannel.ReceiveWithContext(context.Background())
-	if status != priority_channels.ReceiveChannelClosed {
-		t.Errorf("Expected status ReceiveChannelsClosed (%v), but got %v", priority_channels.ReceiveChannelClosed, status)
+	if status != priority_channels.ReceiveInputChannelClosed {
+		t.Errorf("Expected status ReceiveChannelsClosed (%v), but got %v", priority_channels.ReceiveInputChannelClosed, status)
 	}
 	if channelName != "test" {
 		t.Errorf("Expected channel name 'test', but got %s", channelName)

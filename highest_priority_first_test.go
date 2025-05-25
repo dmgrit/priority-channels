@@ -565,8 +565,8 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_ChannelClose(t *testing
 
 	for i := 0; i < 3; i++ {
 		message, channelName, status := ch.ReceiveWithContext(context.Background())
-		if status != pc.ReceiveChannelClosed {
-			t.Errorf("Expected status ReceiveChannelClosed (%d), but got %d", pc.ReceiveChannelClosed, status)
+		if status != pc.ReceiveInputChannelClosed {
+			t.Errorf("Expected status ReceiveInputChannelClosed (%d), but got %d", pc.ReceiveInputChannelClosed, status)
 		}
 		if channelName != "Normal Messages" {
 			t.Errorf("Expected channel name 'Normal Messages', but got %s", channelName)
@@ -577,8 +577,8 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_ChannelClose(t *testing
 	}
 
 	message, channelName, status := ch.ReceiveWithDefaultCase()
-	if status != pc.ReceiveChannelClosed {
-		t.Errorf("Expected status ReceiveChannelClosed (%d), but got %d", pc.ReceiveChannelClosed, status)
+	if status != pc.ReceiveInputChannelClosed {
+		t.Errorf("Expected status ReceiveInputChannelClosed (%d), but got %d", pc.ReceiveInputChannelClosed, status)
 	}
 	if channelName != "Normal Messages" {
 		t.Errorf("Expected channel name 'Normal Messages', but got %s", channelName)

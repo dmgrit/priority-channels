@@ -12,7 +12,7 @@ const (
 	ReceiveSuccess
 	ReceiveContextCanceled
 	ReceiveDefaultCase
-	ReceiveChannelClosed
+	ReceiveInputChannelClosed
 	ReceiveInnerPriorityChannelClosed
 	ReceivePriorityChannelClosed
 	ReceiveNoReceivablePath
@@ -20,8 +20,8 @@ const (
 
 func (r ReceiveStatus) ExitReason() ExitReason {
 	switch r {
-	case ReceiveChannelClosed:
-		return ChannelClosed
+	case ReceiveInputChannelClosed:
+		return InputChannelClosed
 	case ReceiveInnerPriorityChannelClosed:
 		return InnerPriorityChannelClosed
 	case ReceivePriorityChannelClosed:
@@ -39,7 +39,7 @@ type ExitReason int
 
 const (
 	UnknownExitReason ExitReason = iota
-	ChannelClosed
+	InputChannelClosed
 	InnerPriorityChannelClosed
 	PriorityChannelClosed
 	NoReceivablePath

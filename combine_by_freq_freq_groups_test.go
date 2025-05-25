@@ -1205,8 +1205,8 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_ChannelClosed(t *
 
 	for i := 0; i < 3; i++ {
 		message, channelName, status := ch.ReceiveWithContext(context.Background())
-		if status != priority_channels.ReceiveChannelClosed {
-			t.Errorf("Expected status ReceiveChannelClosed (%d), but got %d", priority_channels.ReceiveChannelClosed, status)
+		if status != priority_channels.ReceiveInputChannelClosed {
+			t.Errorf("Expected status ReceiveInputChannelClosed (%d), but got %d", priority_channels.ReceiveInputChannelClosed, status)
 		}
 		if channelName != "Free User - High Priority" {
 			t.Errorf("Expected channel name 'Free User - High Priority', but got %s", channelName)
@@ -1217,8 +1217,8 @@ func TestProcessMessagesByFreqRatioAmongFreqRatioChannelGroups_ChannelClosed(t *
 	}
 
 	message, channelName, status := ch.ReceiveWithDefaultCase()
-	if status != priority_channels.ReceiveChannelClosed {
-		t.Errorf("Expected status ReceiveChannelClosed (%d), but got %d", priority_channels.ReceiveChannelClosed, status)
+	if status != priority_channels.ReceiveInputChannelClosed {
+		t.Errorf("Expected status ReceiveInputChannelClosed (%d), but got %d", priority_channels.ReceiveInputChannelClosed, status)
 	}
 	if channelName != "Free User - High Priority" {
 		t.Errorf("Expected channel name 'Free User - High Priority', but got %s", channelName)

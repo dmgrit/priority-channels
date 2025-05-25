@@ -37,7 +37,7 @@ const (
 
 func tryAwaitRecovery[T any](behaviour ClosureBehavior, pauser pauseAndResumer, priorityChannel *PriorityChannel[T], status ReceiveStatus, channelName string) awaitRecoveryResult {
 	switch {
-	case status == ReceiveChannelClosed && behaviour.InputChannelClosureBehavior == PauseOnClosed:
+	case status == ReceiveInputChannelClosed && behaviour.InputChannelClosureBehavior == PauseOnClosed:
 		pauser.setPaused(status.ExitReason(), channelName)
 		if priorityChannel.AwaitRecover(context.Background(), channelName, InputChannelType) {
 			pauser.setResumed()

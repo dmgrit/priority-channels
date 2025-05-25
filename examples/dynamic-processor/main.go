@@ -196,7 +196,7 @@ func main() {
 						switch reason {
 						case priority_channels.UnknownExitReason:
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Unknown reason\n", state))
-						case priority_channels.ChannelClosed:
+						case priority_channels.InputChannelClosed:
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Channel '%s' closed\n", state, channelName))
 						case priority_channels.PriorityChannelClosed:
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Priority Channel '%s' closed\n", state, channelName))

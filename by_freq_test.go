@@ -1558,8 +1558,8 @@ func TestProcessMessagesByFrequencyRatio_ChannelClosed(t *testing.T) {
 	}
 	for i := 0; i < 3; i++ {
 		message, channelName, status := ch.ReceiveWithContext(context.Background())
-		if status != pc.ReceiveChannelClosed {
-			t.Errorf("Expected status ReceiveChannelClosed (%d), but got %d", pc.ReceiveChannelClosed, status)
+		if status != pc.ReceiveInputChannelClosed {
+			t.Errorf("Expected status ReceiveInputChannelClosed (%d), but got %d", pc.ReceiveInputChannelClosed, status)
 		}
 		if channelName != "Normal Priority" {
 			t.Errorf("Expected channel name 'Normal Priority', but got %s", channelName)
@@ -1570,8 +1570,8 @@ func TestProcessMessagesByFrequencyRatio_ChannelClosed(t *testing.T) {
 	}
 
 	message, channelName, status := ch.ReceiveWithDefaultCase()
-	if status != pc.ReceiveChannelClosed {
-		t.Errorf("Expected status ReceiveChannelClosed (%d), but got %d", pc.ReceiveChannelClosed, status)
+	if status != pc.ReceiveInputChannelClosed {
+		t.Errorf("Expected status ReceiveInputChannelClosed (%d), but got %d", pc.ReceiveInputChannelClosed, status)
 	}
 	if channelName != "Normal Priority" {
 		t.Errorf("Expected channel name 'Normal Priority', but got %s", channelName)
