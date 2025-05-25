@@ -29,12 +29,14 @@ func main() {
 	var inputChannels []chan string
 	var triggerPauseChannels []chan bool
 	var triggerCloseChannels []chan bool
+	var triggerRecoverChannels []chan chan string
 
 	channelsNum := 5
 	for i := 1; i <= channelsNum; i++ {
 		inputChannels = append(inputChannels, make(chan string))
 		triggerPauseChannels = append(triggerPauseChannels, make(chan bool))
 		triggerCloseChannels = append(triggerCloseChannels, make(chan bool))
+		triggerRecoverChannels = append(triggerRecoverChannels, make(chan chan string))
 	}
 	channelsOrder := map[string]int{
 		"Customer A - High Priority": 1,
@@ -99,6 +101,10 @@ func main() {
 		},
 	}
 
+	if len(os.Args) > 1 && os.Args[1] == "-a" {
+		setAutoDisabledPriorityChannelConfig(priorityConfig.PriorityChannel)
+	}
+
 	channelNameToChannel := map[string]<-chan string{
 		"Customer A - High Priority": inputChannels[0],
 		"Customer A - Low Priority":  inputChannels[1],
@@ -106,13 +112,20 @@ func main() {
 		"Customer B - Low Priority":  inputChannels[3],
 		"Urgent Messages":            inputChannels[4],
 	}
+	channelNames := []string{
+		"Customer A - High Priority",
+		"Customer A - Low Priority",
+		"Customer B - High Priority",
+		"Customer B - Low Priority",
+		"Urgent Messages",
+	}
 
 	receivedMsgs := 0
 	byChannelName := make(map[string]int)
 	var receivedMsgsMutex sync.Mutex
 	var presentDetails atomic.Bool
 
-	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, func(d priority_channels.Delivery[string]) {
+	processFn := func(d priority_channels.Delivery[string]) {
 		time.Sleep(100 * time.Millisecond)
 		receivedMsgsMutex.Lock()
 		receivedMsgs++
@@ -127,13 +140,21 @@ func main() {
 		}
 		byChannelName[fullChannelPath] = byChannelName[fullChannelPath] + 1
 		receivedMsgsMutex.Unlock()
-	}, channelNameToChannel, priorityConfig, 3)
+	}
+	closureBehavior := priority_channels.ClosureBehavior{
+		InputChannelClosureBehavior:         priority_channels.PauseOnClosed,
+		InnerPriorityChannelClosureBehavior: priority_channels.PauseOnClosed,
+		NoOpenChannelsBehavior:              priority_channels.PauseWhenNoOpenChannels,
+	}
+
+	innerPriorityChannelsContexts, innerPriorityChannelsCancelFuncs := generateInnerPriorityChannelsContextsAndCancelFuncs()
+	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, channelNameToChannel, innerPriorityChannelsContexts, priorityConfig, 3, closureBehavior)
 	if err != nil {
 		fmt.Printf("failed to initialize dynamic priority processor: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = wp.Start()
+	err = wp.Process(processFn)
 	if err != nil {
 		fmt.Printf("failed to start processing messages: %v\n", err)
 		os.Exit(1)
@@ -163,38 +184,40 @@ func main() {
 	fmt.Printf("To see the results live, run in another terminal window:\ntail -f %s\n\n", demoFilePath)
 
 	for i := 1; i <= len(inputChannels); i++ {
-		go func(i int) {
+		go func(inputChannel chan string, triggerPauseChannel chan bool, triggerCloseChannel chan bool, triggerRecoverChannel chan chan string) {
 			paused := true
 			closed := false
 			j := 0
 			for {
 				j++
 				select {
-				case b := <-triggerPauseChannels[i-1]:
+				case b := <-triggerPauseChannel:
 					paused = !b
-				case b := <-triggerCloseChannels[i-1]:
+				case b := <-triggerCloseChannel:
 					if b && !closed {
-						close(inputChannels[i-1])
+						close(inputChannel)
 						closed = true
 					}
+				case inputChannel = <-triggerRecoverChannel:
+					closed = false
 				default:
 					if !paused && !closed {
 						select {
-						case b := <-triggerPauseChannels[i-1]:
+						case b := <-triggerPauseChannel:
 							paused = !b
-						case b := <-triggerCloseChannels[i-1]:
+						case b := <-triggerCloseChannel:
 							if b && !closed {
-								close(inputChannels[i-1])
+								close(inputChannel)
 								closed = true
 							}
-						case inputChannels[i-1] <- fmt.Sprintf("message-%d", j):
+						case inputChannel <- fmt.Sprintf("message-%d", j):
 						}
 					} else {
 						time.Sleep(100 * time.Millisecond)
 					}
 				}
 			}
-		}(i)
+		}(inputChannels[i-1], triggerPauseChannels[i-1], triggerCloseChannels[i-1], triggerRecoverChannels[i-1])
 	}
 
 	tickerCh := time.Tick(5 * time.Second)
@@ -227,19 +250,25 @@ func main() {
 					}
 				} else {
 					_, _ = f.WriteString("No messages received in the last 5 seconds\n")
-					stopped, reason, channelName := wp.Status()
-					if stopped {
+					status, reason, channelName := wp.Status()
+					if status != priority_channels.Running {
+						var state string
+						if status == priority_channels.Stopped {
+							state = "stopped"
+						} else {
+							state = "paused"
+						}
 						switch reason {
 						case priority_channels.UnknownExitReason:
-							_, _ = f.WriteString("Worker pool stopped: Unknown reason\n")
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Unknown reason\n", state))
 						case priority_channels.ChannelClosed:
-							_, _ = f.WriteString(fmt.Sprintf("Worker pool stopped: Channel '%s' closed\n", channelName))
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Channel '%s' closed\n", state, channelName))
 						case priority_channels.PriorityChannelClosed:
-							_, _ = f.WriteString(fmt.Sprintf("Worker pool stopped: Priority Channel '%s' closed\n", channelName))
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Priority Channel '%s' closed\n", state, channelName))
 						case priority_channels.NoOpenChannels:
-							_, _ = f.WriteString("Worker pool stopped: No open channels\n")
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: No open channels\n", state))
 						case priority_channels.ContextCanceled:
-							_, _ = f.WriteString("Worker pool stopped: Context Canceled\n")
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Context canceled\n", state))
 						}
 					}
 				}
@@ -264,34 +293,38 @@ func main() {
 			operation = "Stopped"
 		}
 		if strings.HasPrefix(upperLine, "C") {
-			//switch upperLine {
-			//case "CA":
-			//	fmt.Printf("Closing Priority Channel of Customer A\n")
-			//	customerAPriorityChannel.Close()
-			//	continue
-			//case "CB":
-			//	fmt.Printf("Closing Priority Channel of Customer B\n")
-			//	customerBPriorityChannel.Close()
-			//	continue
-			//case "CU":
-			//	fmt.Printf("Closing Priority Channel of Urgent Messages\n")
-			//	urgentMessagesPriorityChannel.Close()
-			//	continue
-			//case "CC":
-			//	fmt.Printf("Closing Combined Priority Channel of Both Customers\n")
-			//	combinedUsersAndMessageTypesPriorityChannel.Close()
-			//	continue
-			//case "CG":
-			//	fmt.Printf("Closing Priority Channel \n")
-			//	ch.Close()
-			//	continue
-			//}
+			switch upperLine {
+			case "CA":
+				if cancelFunc := innerPriorityChannelsCancelFuncs["Customer A"]; cancelFunc != nil {
+					fmt.Printf("Closing Priority Channel of Customer A\n")
+					cancelFunc()
+				}
+				continue
+			case "CB":
+				if cancelFunc := innerPriorityChannelsCancelFuncs["Customer B"]; cancelFunc != nil {
+					fmt.Printf("Closing Priority Channel of Customer B\n")
+					cancelFunc()
+				}
+				continue
+			case "CU":
+				if cancelFunc := innerPriorityChannelsCancelFuncs["Urgent Messages"]; cancelFunc != nil {
+					fmt.Printf("Closing Priority Channel of Urgent Messages\n")
+					cancelFunc()
+				}
+				continue
+			case "CC":
+				if cancelFunc := innerPriorityChannelsCancelFuncs["Customer Messages"]; cancelFunc != nil {
+					fmt.Printf("Closing Priority Channel of of Both Customers\n")
+					cancelFunc()
+				}
+				continue
+			}
 			upperLine = strings.TrimPrefix(upperLine, "C")
 			number, err := strconv.Atoi(upperLine)
 			if err != nil || number <= 0 || number > channelsNum {
 				continue
 			}
-			fmt.Printf("Closing Channel %d\n", number)
+			fmt.Printf("Closing Channel '%s'\n", channelNames[number-1])
 			triggerCloseChannels[number-1] <- value
 			continue
 		}
@@ -312,7 +345,8 @@ func main() {
 					continue
 				}
 
-				if err := wp.UpdatePriorityConfiguration(priorityConfig); err != nil {
+				innerPriorityChannelsContexts, innerPriorityChannelsCancelFuncs = generateInnerPriorityChannelsContextsAndCancelFuncs()
+				if err := wp.UpdatePriorityConfiguration(priorityConfig, innerPriorityChannelsContexts); err != nil {
 					fmt.Printf("failed to update priority consumer configuration: %v\n", err)
 					continue
 				}
@@ -353,6 +387,38 @@ func main() {
 		case "U", "NU":
 			triggerPauseChannels[4] <- value
 			fmt.Printf(operation + " receiving Urgent messages\n")
+		case "RA":
+			fmt.Printf("Recovering Priority Channel of Customer A\n")
+			newCtx, cancelFunc := context.WithCancel(context.Background())
+			innerPriorityChannelsCancelFuncs["Customer A"] = cancelFunc
+			wp.RecoverClosedInnerPriorityChannel("Customer A", newCtx)
+		case "RB":
+			fmt.Printf("Recovering Priority Channel of Customer B\n")
+			newCtx, cancelFunc := context.WithCancel(context.Background())
+			innerPriorityChannelsCancelFuncs["Customer B"] = cancelFunc
+			wp.RecoverClosedInnerPriorityChannel("Customer B", newCtx)
+		case "RU":
+			fmt.Printf("Recovering Priority Channel of Urgent Messages\n")
+			newCtx, cancelFunc := context.WithCancel(context.Background())
+			innerPriorityChannelsCancelFuncs["Urgent Messages"] = cancelFunc
+			wp.RecoverClosedInnerPriorityChannel("Urgent Messages", newCtx)
+		case "RCC":
+			fmt.Printf("Recovering Combined Priority Channel of Both Customers\n")
+			newCtx, cancelFunc := context.WithCancel(context.Background())
+			innerPriorityChannelsCancelFuncs["Customer Messages"] = cancelFunc
+			wp.RecoverClosedInnerPriorityChannel("Customer Messages", newCtx)
+		case "R1", "R2", "R3", "R4", "R5":
+			upperLine = strings.TrimPrefix(upperLine, "R")
+			number, err := strconv.Atoi(upperLine)
+			if err != nil || number <= 0 || number > channelsNum {
+				continue
+			}
+			channelIndex := number - 1
+			newChannel := make(chan string)
+			inputChannels[channelIndex] = newChannel
+			wp.RecoverClosedInputChannel(channelNames[channelIndex], newChannel)
+			triggerRecoverChannels[channelIndex] <- newChannel
+			fmt.Printf("Recovering Channel '%s'\n", channelNames[channelIndex])
 		case "D":
 			presentDetails.Store(true)
 			fmt.Printf("Presenting receive path on\n")
@@ -361,7 +427,7 @@ func main() {
 			fmt.Printf("Presenting receive path off\n")
 		case "QUIT":
 			fmt.Printf("Waiting for all workers to finish...\n")
-			wp.StopGracefully()
+			wp.Stop()
 			<-wp.Done()
 			fmt.Printf("Processing finished\n")
 			return
@@ -369,6 +435,31 @@ func main() {
 			fmt.Printf("Workers number: %d\n", wp.WorkersNum())
 		case "ACTIVE":
 			fmt.Printf("Active workers number: %d\n", wp.ActiveWorkersNum())
+		}
+	}
+}
+
+func generateInnerPriorityChannelsContextsAndCancelFuncs() (map[string]context.Context, map[string]context.CancelFunc) {
+	priorityChannelsContexts := make(map[string]context.Context)
+	priorityChannelsCancelFuncs := make(map[string]context.CancelFunc)
+
+	allPriorityChannels := []string{"Customer A", "Customer B", "Customer Messages", "Urgent Messages"}
+	for _, channelName := range allPriorityChannels {
+		ctx, cancel := context.WithCancel(context.Background())
+		priorityChannelsContexts[channelName] = ctx
+		priorityChannelsCancelFuncs[channelName] = cancel
+	}
+	return priorityChannelsContexts, priorityChannelsCancelFuncs
+}
+
+func setAutoDisabledPriorityChannelConfig(config *priority_channels.PriorityChannelConfig) {
+	if config == nil {
+		return
+	}
+	config.AutoDisableClosedChannels = true
+	for _, channel := range config.Channels {
+		if channel.PriorityChannelConfig != nil {
+			setAutoDisabledPriorityChannelConfig(channel.PriorityChannelConfig)
 		}
 	}
 }

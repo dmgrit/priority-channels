@@ -1,8 +1,9 @@
-package workerpool
+package priority_channels
 
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dmgrit/priority-channels/internal/synchronization"
@@ -11,17 +12,24 @@ import (
 type token struct{}
 
 type DynamicWorkerPool[T any] struct {
-	processFn                      func(T)
+	priorityChannel                *PriorityChannel[T]
 	activeGoroutines               atomic.Int32
 	started                        atomic.Uint32
 	state                          stateManager
+	pendingReceiveContextCancel    context.CancelFunc
+	pendingReceiveContextCancelMtx sync.Mutex
 	ctx                            context.Context
 	cancel                         context.CancelFunc
 	done                           chan struct{}
 	restartFromStoppedStateTracker *synchronization.RepeatingStateTracker
+	priorityChannelUpdatesMtx      sync.Mutex
+	status                         ProcessingStatus
+	exitReason                     ExitReason
+	exitReasonChannelName          string
+	closureBehaviour               ClosureBehavior
 }
 
-func NewDynamicWorkerPool[T any](ctx context.Context, processFn func(T), numWorkers int) (*DynamicWorkerPool[T], error) {
+func NewDynamicWorkerPool[T any](ctx context.Context, priorityChannel *PriorityChannel[T], numWorkers int, closureBehaviour ClosureBehavior) (*DynamicWorkerPool[T], error) {
 	if numWorkers < 0 {
 		return nil, errors.New("number of workers must be a non-negative number")
 	}
@@ -36,16 +44,31 @@ func NewDynamicWorkerPool[T any](ctx context.Context, processFn func(T), numWork
 
 	ctxWithCancel, cancel := context.WithCancel(ctx)
 	return &DynamicWorkerPool[T]{
+		priorityChannel:                priorityChannel,
 		state:                          stateCh,
-		processFn:                      processFn,
 		done:                           make(chan struct{}),
 		ctx:                            ctxWithCancel,
 		cancel:                         cancel,
 		restartFromStoppedStateTracker: synchronization.NewRepeatingStateTracker(),
+		closureBehaviour:               closureBehaviour,
 	}, nil
 }
 
-func (p *DynamicWorkerPool[T]) Process(msgs <-chan T) error {
+func (p *DynamicWorkerPool[T]) Process(processFn func(Delivery[T])) error {
+	fnGetResult := func(msg T, details ReceiveDetails) Delivery[T] {
+		return Delivery[T]{Msg: msg, ReceiveDetails: details}
+	}
+	return doProcess(p, fnGetResult, processFn)
+}
+
+func (p *DynamicWorkerPool[T]) ProcessMessages(processFn func(T)) error {
+	fnGetResult := func(msg T, details ReceiveDetails) T {
+		return msg
+	}
+	return doProcess(p, fnGetResult, processFn)
+}
+
+func doProcess[T any, R any](p *DynamicWorkerPool[T], fnGetResult func(msg T, details ReceiveDetails) R, processFn func(R)) error {
 	if !p.started.CompareAndSwap(0, 1) {
 		return errors.New("worker pool already started")
 	}
@@ -55,26 +78,34 @@ func (p *DynamicWorkerPool[T]) Process(msgs <-chan T) error {
 			select {
 			case <-p.ctx.Done():
 				return
-			case msg, ok := <-msgs:
-				if !ok {
-					return
-				}
+			default:
 				sem, currWorkersNum := p.state.Get()
 				if currWorkersNum == 0 {
-					// Process the last read message so it isn't dropped,
-					// then block and wait for an explicit signal that workers have restarted.
-					p.activeGoroutines.Add(1)
-					p.processFn(msg)
-					p.activeGoroutines.Add(-1)
 					if !p.restartFromStoppedStateTracker.Await(p.ctx) {
 						return
 					}
 					continue
 				}
 				sem <- token{}
+				ctx, cancel := context.WithCancel(p.ctx)
+				p.setPendingReceiveContextCancel(cancel)
+				msg, receiveDetails, status := p.priorityChannel.ReceiveWithContextEx(ctx)
+				if status != ReceiveSuccess {
+					<-sem
+					if status == ReceiveContextCanceled {
+						continue
+					}
+					recoveryResult := tryAwaitRecovery(p.closureBehaviour, p, p.priorityChannel, status, receiveDetails.ChannelName)
+					if recoveryResult == awaitRecoveryNotApplicable {
+						p.setClosed(status.ExitReason(), receiveDetails.ChannelName)
+						return
+					}
+					continue
+				}
+
 				go func(sem chan token) {
 					p.activeGoroutines.Add(1)
-					p.processFn(msg)
+					processFn(fnGetResult(msg, receiveDetails))
 					p.activeGoroutines.Add(-1)
 					<-sem
 				}(sem)
@@ -82,6 +113,20 @@ func (p *DynamicWorkerPool[T]) Process(msgs <-chan T) error {
 		}
 	}()
 	return nil
+}
+
+func (p *DynamicWorkerPool[T]) setPendingReceiveContextCancel(cancel context.CancelFunc) {
+	p.pendingReceiveContextCancelMtx.Lock()
+	p.pendingReceiveContextCancel = cancel
+	p.pendingReceiveContextCancelMtx.Unlock()
+}
+
+func (p *DynamicWorkerPool[T]) callPendingReceiveContextCancel() {
+	p.pendingReceiveContextCancelMtx.Lock()
+	if p.pendingReceiveContextCancel != nil {
+		p.pendingReceiveContextCancel()
+	}
+	p.pendingReceiveContextCancelMtx.Unlock()
 }
 
 func (p *DynamicWorkerPool[T]) Shutdown() {
@@ -139,6 +184,7 @@ func (p *DynamicWorkerPool[T]) doUpdateWorkersNum(newWorkersNum int) {
 	}
 
 	// wait for all currently running tasks to finish
+	p.callPendingReceiveContextCancel()
 	for i := currWorkersNum; i > 0; i-- {
 		prevSem <- token{}
 		if i <= newWorkersNum {
@@ -154,6 +200,47 @@ func (p *DynamicWorkerPool[T]) WorkersNum() int {
 
 func (p *DynamicWorkerPool[T]) ActiveWorkersNum() int {
 	return int(p.activeGoroutines.Load())
+}
+
+// Status returns whether the consumer is stopped, and if so, the reason for stopping and,
+// in case the reason is a closed channel, the name of the channel that was closed.
+func (p *DynamicWorkerPool[T]) Status() (status ProcessingStatus, reason ExitReason, channelName string) {
+	p.priorityChannelUpdatesMtx.Lock()
+	defer p.priorityChannelUpdatesMtx.Unlock()
+
+	select {
+	case <-p.Done():
+		return Stopped, PriorityChannelClosed, ""
+	default:
+		return p.status, p.exitReason, p.exitReasonChannelName
+	}
+}
+
+func (p *DynamicWorkerPool[T]) setClosed(exitReason ExitReason, exitReasonChannelName string) {
+	p.priorityChannelUpdatesMtx.Lock()
+	defer p.priorityChannelUpdatesMtx.Unlock()
+
+	p.status = Stopped
+	p.exitReason = exitReason
+	p.exitReasonChannelName = exitReasonChannelName
+}
+
+func (p *DynamicWorkerPool[T]) setPaused(exitReason ExitReason, exitReasonChannelName string) {
+	p.priorityChannelUpdatesMtx.Lock()
+	defer p.priorityChannelUpdatesMtx.Unlock()
+
+	p.status = Paused
+	p.exitReason = exitReason
+	p.exitReasonChannelName = exitReasonChannelName
+}
+
+func (p *DynamicWorkerPool[T]) setResumed() {
+	p.priorityChannelUpdatesMtx.Lock()
+	defer p.priorityChannelUpdatesMtx.Unlock()
+
+	p.status = Running
+	p.exitReason = UnknownExitReason
+	p.exitReasonChannelName = ""
 }
 
 type poolState struct {

@@ -1,6 +1,7 @@
 {
   "priorityChannel": {
     "method": "by-highest-always-first",
+    "autoDisableClosedChannels": true,
     "channels": [
       {
         "name": "Channel A",
@@ -11,6 +12,7 @@
         "priority": 1,
         "priorityChannel": {
           "method": "by-frequency-ratio",
+          "autoDisableClosedChannels": false,
           "channels": [
             {
               "name": "Channel B",

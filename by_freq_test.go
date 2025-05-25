@@ -52,10 +52,12 @@ func TestProcessMessagesByFrequencyRatio(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	done := make(chan pc.ExitReason)
+	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, done)
 
 	time.Sleep(3 * time.Second)
 	cancel()
+	<-done
 
 	expectedResults := []*Msg{
 		{Body: "Priority-1000 Msg-1"},
@@ -1439,7 +1441,6 @@ func TestProcessMessagesByFrequencyRatio_AutoDisableClosedChannels(t *testing.T)
 				}
 				receivedMessagesCount++
 				fmt.Printf("%s: %s\n", channelName, message)
-				time.Sleep(10 * time.Millisecond)
 			}
 		})
 	}
@@ -1481,7 +1482,8 @@ func TestProcessMessagesByFrequencyRatio_MessagesInOneOfTheChannelsArriveAfterSo
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	done := make(chan pc.ExitReason)
+	go pc.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, done)
 
 	time.Sleep(1 * time.Second)
 	for j := 6; j <= 7; j++ {
@@ -1495,6 +1497,7 @@ func TestProcessMessagesByFrequencyRatio_MessagesInOneOfTheChannelsArriveAfterSo
 
 	time.Sleep(3 * time.Second)
 	cancel()
+	<-done
 
 	expectedResults := []*Msg{
 		{Body: "Priority-3 Msg-1"},

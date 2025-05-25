@@ -73,10 +73,12 @@ func TestProcessMessagesByFreqRatioAmongHighestFirstChannelGroups(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go priority_channels.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	done := make(chan priority_channels.ExitReason)
+	go priority_channels.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, done)
 
 	time.Sleep(3 * time.Second)
 	cancel()
+	<-done
 
 	expectedResults := []*Msg{
 		{Body: "Priority-1000 Msg-1"},

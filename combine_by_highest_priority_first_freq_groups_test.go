@@ -76,10 +76,12 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go priority_channels.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	processingDone := make(chan priority_channels.ExitReason)
+	go priority_channels.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, processingDone)
 
 	<-done
 	cancel()
+	<-processingDone
 
 	expectedResults := []*Msg{
 		{Body: "Priority-1000 Msg-1"},
@@ -198,7 +200,8 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_MessagesInOneOfThe
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go priority_channels.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	done := make(chan priority_channels.ExitReason)
+	go priority_channels.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, done)
 
 	time.Sleep(1 * time.Second)
 	for j := 6; j <= 7; j++ {
@@ -212,6 +215,7 @@ func TestProcessMessagesByPriorityAmongFreqRatioChannelGroups_MessagesInOneOfThe
 
 	time.Sleep(3 * time.Second)
 	cancel()
+	<-done
 
 	expectedResults := []*Msg{
 		{Body: "Priority-3 Msg-1"},
@@ -832,8 +836,8 @@ func TestCombineHighestAlwaysFirstPriorityChannelValidation(t *testing.T) {
 			ctx := context.Background()
 
 			priorityChannels := make([]priority_channels.PriorityChannelWithPriority[string], 0, len(tc.ChannelsWithPriorities))
-			for _, ch := range tc.ChannelsWithPriorities {
-				pch, err := priority_channels.WrapAsPriorityChannel(ctx, "******", make(chan string)) //ch.MsgsC())
+			for i, ch := range tc.ChannelsWithPriorities {
+				pch, err := priority_channels.WrapAsPriorityChannel(ctx, fmt.Sprintf("channel %d", i), make(chan string)) //ch.MsgsC())
 				if err != nil {
 					t.Fatalf("Unexpected error on wrapping as priority channel: %v", err)
 				}

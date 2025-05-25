@@ -9,18 +9,17 @@ import (
 
 type PriorityConsumer[T any] struct {
 	ctx                       context.Context
-	channelNameToChannel      map[string]<-chan T
 	priorityChannel           *PriorityChannel[T]
-	priorityChannelConfig     Configuration
 	priorityChannelUpdatesMtx sync.Mutex
-	priorityChannelUpdatesC   chan *PriorityChannel[T]
 	priorityChannelClosedC    chan struct{}
 	forceShutdownChannel      chan struct{}
 	onMessageDrop             func(msg T, channelName string)
+	started                   bool
 	isStopping                bool
-	isStopped                 bool
+	status                    ProcessingStatus
 	exitReason                ExitReason
 	exitReasonChannelName     string
+	closureBehaviour          ClosureBehavior
 }
 
 type Delivery[T any] struct {
@@ -31,20 +30,27 @@ type Delivery[T any] struct {
 func NewConsumer[T any](
 	ctx context.Context,
 	channelNameToChannel map[string]<-chan T,
+	innerPriorityChannelsContexts map[string]context.Context,
 	priorityConfiguration Configuration,
+	closureBehaviour ClosureBehavior,
 ) (*PriorityConsumer[T], error) {
-	priorityChannel, err := NewFromConfiguration(ctx, priorityConfiguration, channelNameToChannel)
+	priorityChannel, err := NewFromConfiguration(ctx, priorityConfiguration, channelNameToChannel, innerPriorityChannelsContexts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create priority channel from configuration: %w", err)
 	}
 	return &PriorityConsumer[T]{
 		ctx:                    ctx,
 		priorityChannel:        priorityChannel,
-		channelNameToChannel:   channelNameToChannel,
-		priorityChannelConfig:  priorityConfiguration,
 		priorityChannelClosedC: make(chan struct{}),
 		forceShutdownChannel:   make(chan struct{}),
+		closureBehaviour:       closureBehaviour,
 	}, nil
+}
+
+func (c *PriorityConsumer[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+	c.priorityChannel.NotifyClose(ch)
 }
 
 func (c *PriorityConsumer[T]) Consume() (<-chan Delivery[T], error) {
@@ -68,44 +74,40 @@ func doConsume[T any, R any](c *PriorityConsumer[T], fnGetResult func(msg T, det
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
-	if c.priorityChannelUpdatesC != nil {
+	if c.started {
 		return nil, errors.New("consume already called")
 	} else if c.isStopping {
 		return nil, errors.New("cannot consume after stopping")
 	}
 
 	deliveries := make(chan R)
-	c.priorityChannelUpdatesC = make(chan *PriorityChannel[T], 1)
+	c.started = true
 	go func() {
 		defer close(deliveries)
 		for {
-			select {
-			case priorityChannel, ok := <-c.priorityChannelUpdatesC:
-				c.priorityChannel.Close()
-				if !ok {
-					c.setClosed(PriorityChannelClosed, "")
-					return
-				}
-				c.priorityChannel = priorityChannel
-			default:
-				// There is no context per-message, but there is a single context for the entire priority-channel
-				// On receiving the message we do not pass any specific context,
-				// but on processing the message we pass the priority-channel context
-				msg, receiveDetails, status := c.priorityChannel.ReceiveWithContextEx(context.Background())
-				channelName := receiveDetails.ChannelName
-				if status != ReceiveSuccess {
+			// There is no context per-message, but there is a single context for the entire priority-channel
+			// On receiving the message we do not pass any specific context,
+			// but on processing the message we pass the priority-channel context
+			msg, receiveDetails, status := c.priorityChannel.ReceiveWithContextEx(context.Background())
+			channelName := receiveDetails.ChannelName
+
+			if status != ReceiveSuccess {
+				recoveryResult := tryAwaitRecovery(c.closureBehaviour, c, c.priorityChannel, status, channelName)
+				if recoveryResult == awaitRecoveryNotApplicable {
 					c.setClosed(status.ExitReason(), channelName)
 					return
 				}
-				select {
-				case deliveries <- fnGetResult(msg, receiveDetails):
-				case <-c.forceShutdownChannel:
-					if c.onMessageDrop != nil {
-						c.onMessageDrop(msg, channelName)
-					}
-					c.setClosed(PriorityChannelClosed, "")
-					return
+				continue
+			}
+
+			select {
+			case deliveries <- fnGetResult(msg, receiveDetails):
+			case <-c.forceShutdownChannel:
+				if c.onMessageDrop != nil {
+					c.onMessageDrop(msg, channelName)
 				}
+				c.setClosed(PriorityChannelClosed, "")
+				return
 			}
 		}
 	}()
@@ -113,31 +115,42 @@ func doConsume[T any, R any](c *PriorityConsumer[T], fnGetResult func(msg T, det
 	return deliveries, nil
 }
 
-func (c *PriorityConsumer[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration) error {
+func (c *PriorityConsumer[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration, innerPriorityChannelsContexts map[string]context.Context) error {
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
-	if c.priorityChannelUpdatesC == nil {
-		return errors.New("cannot update priority channel configuration before consuming has started")
-	}
 	if c.isStopping {
 		return errors.New("cannot update priority channel configuration after stopping")
 	}
 
-	priorityChannel, err := NewFromConfiguration(c.ctx, priorityConfiguration, c.channelNameToChannel)
+	err := c.priorityChannel.UpdatePriorityConfiguration(priorityConfiguration, innerPriorityChannelsContexts)
 	if err != nil {
 		return fmt.Errorf("failed to create priority channel from configuration: %w", err)
 	}
-	if priorityChannel == nil {
-		return errors.New("failed to create priority channel from configuration")
+	return nil
+}
+
+func (c *PriorityConsumer[T]) RecoverClosedInputChannel(channelName string, ch <-chan T) error {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+
+	if c.isStopping {
+		return errors.New("cannot recover input channel after stopping")
 	}
 
-	select {
-	case c.priorityChannelUpdatesC <- priorityChannel:
-	default:
-		return errors.New("priority configuration update is already in progress, please retry later")
+	c.priorityChannel.RecoverClosedInputChannel(channelName, ch)
+	return nil
+}
+
+func (c *PriorityConsumer[T]) RecoverClosedInnerPriorityChannel(channelName string, ctx context.Context) error {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+
+	if c.isStopping {
+		return errors.New("cannot recover priority channel after stopping")
 	}
 
+	c.priorityChannel.RecoverClosedInnerPriorityChannel(channelName, ctx)
 	return nil
 }
 
@@ -163,7 +176,6 @@ func (c *PriorityConsumer[T]) stop(graceful bool, onMessageDrop func(msg T, chan
 		c.isStopping = true
 		c.onMessageDrop = onMessageDrop
 		c.priorityChannel.Close()
-		close(c.priorityChannelUpdatesC)
 	}
 	c.priorityChannelUpdatesMtx.Unlock()
 
@@ -173,23 +185,46 @@ func (c *PriorityConsumer[T]) stop(graceful bool, onMessageDrop func(msg T, chan
 	<-c.priorityChannelClosedC
 }
 
+type ProcessingStatus int
+
+const (
+	Running ProcessingStatus = iota
+	Paused
+	Stopped
+)
+
 // Status returns whether the consumer is stopped, and if so, the reason for stopping and,
 // in case the reason is a closed channel, the name of the channel that was closed.
-func (c *PriorityConsumer[T]) Status() (stopped bool, reason ExitReason, channelName string) {
+func (c *PriorityConsumer[T]) Status() (status ProcessingStatus, reason ExitReason, channelName string) {
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
-	if c.isStopped {
-		return true, c.exitReason, c.exitReasonChannelName
-	}
-	return false, UnknownExitReason, ""
+	return c.status, c.exitReason, c.exitReasonChannelName
+}
+
+func (c *PriorityConsumer[T]) setPaused(exitReason ExitReason, exitReasonChannelName string) {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+
+	c.status = Paused
+	c.exitReason = exitReason
+	c.exitReasonChannelName = exitReasonChannelName
+}
+
+func (c *PriorityConsumer[T]) setResumed() {
+	c.priorityChannelUpdatesMtx.Lock()
+	defer c.priorityChannelUpdatesMtx.Unlock()
+
+	c.status = Running
+	c.exitReason = UnknownExitReason
+	c.exitReasonChannelName = ""
 }
 
 func (c *PriorityConsumer[T]) setClosed(exitReason ExitReason, exitReasonChannelName string) {
 	c.priorityChannelUpdatesMtx.Lock()
 	defer c.priorityChannelUpdatesMtx.Unlock()
 
-	c.isStopped = true
+	c.status = Stopped
 	c.exitReason = exitReason
 	c.exitReasonChannelName = exitReasonChannelName
 	close(c.priorityChannelClosedC)

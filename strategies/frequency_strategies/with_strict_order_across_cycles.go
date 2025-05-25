@@ -98,6 +98,35 @@ func (s *WithStrictOrderAcrossCycles) DisableSelectCase(index int) {
 	s.disabledCases[index] = bucket.Value().Capacity
 }
 
+func (s *WithStrictOrderAcrossCycles) EnableSelectCase(index int) {
+	freqRatio, ok := s.disabledCases[index]
+	if !ok {
+		return
+	}
+	delete(s.disabledCases, index)
+	bucket := &aPriorityBucket{
+		OrigChannelIndex: index,
+		Value:            0,
+		Capacity:         freqRatio,
+	}
+	bucketNode := collections.NewListNode(bucket)
+	s.origIndexToBucket[index] = bucketNode
+	firstLevel := s.levels.FirstNode()
+	if firstLevel == nil {
+		s.levels.Append(collections.NewListNode(&aLevel{}))
+		firstLevel = s.levels.FirstNode()
+	}
+	s.addBucketToLevel(bucketNode, firstLevel)
+}
+
+func (s *WithStrictOrderAcrossCycles) InitializeCopy(freqRatios []int) (interface{}, error) {
+	res := NewWithStrictOrderAcrossCycles()
+	if err := res.Initialize(freqRatios); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 func (s *WithStrictOrderAcrossCycles) updateStateOnReceivingMessageToBucket(bucket *collections.ListNode[*aPriorityBucket]) {
 	b := bucket.Value()
 	b.Value++

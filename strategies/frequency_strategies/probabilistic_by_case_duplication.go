@@ -32,14 +32,12 @@ func (s *ProbabilisticByCaseDuplication) Initialize(freqRatios []int) error {
 		s.origFreqRatios = append(s.origFreqRatios, freqRatio)
 	}
 	s.selectedIndexes = make([]strategies.RankedIndex, 0, totalSum)
-	currIndex := 0
 	for i, freqRatio := range freqRatios {
 		for j := 0; j < freqRatio; j++ {
 			s.selectedIndexes = append(s.selectedIndexes, strategies.RankedIndex{
 				Index: i,
 				Rank:  1,
 			})
-			currIndex++
 		}
 	}
 	return nil
@@ -81,4 +79,26 @@ func (s *ProbabilisticByCaseDuplication) DisableSelectCase(index int) {
 	lastIndex := firstIndex + s.origFreqRatios[index] - 1
 	s.selectedIndexes = append(s.selectedIndexes[:firstIndex], s.selectedIndexes[lastIndex+1:]...)
 	s.disabledCases[index] = s.origFreqRatios[index]
+}
+
+func (s *ProbabilisticByCaseDuplication) EnableSelectCase(index int) {
+	freqRatio, ok := s.disabledCases[index]
+	if !ok {
+		return
+	}
+	delete(s.disabledCases, index)
+	for j := 0; j < freqRatio; j++ {
+		s.selectedIndexes = append(s.selectedIndexes, strategies.RankedIndex{
+			Index: index,
+			Rank:  1,
+		})
+	}
+}
+
+func (s *ProbabilisticByCaseDuplication) InitializeCopy(freqRatios []int) (interface{}, error) {
+	res := NewProbabilisticByCaseDuplication()
+	if err := res.Initialize(freqRatios); err != nil {
+		return nil, err
+	}
+	return res, nil
 }

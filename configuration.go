@@ -83,14 +83,29 @@ type ChannelConfig struct {
 	*PriorityChannelConfig `json:"priorityChannel,omitempty"`
 }
 
-func NewFromConfiguration[T any](ctx context.Context, config Configuration, channelNameToChannel map[string]<-chan T) (*PriorityChannel[T], error) {
+func NewFromConfiguration[T any](ctx context.Context,
+	config Configuration,
+	channelNameToChannel map[string]<-chan T,
+	innerPriorityChannelsContexts map[string]context.Context) (*PriorityChannel[T], error) {
 	if config.PriorityChannel == nil {
 		return nil, fmt.Errorf("no priority channel config found")
 	}
-	return newFromPriorityChannelConfig(ctx, *config.PriorityChannel, channelNameToChannel)
+	if _, ok := innerPriorityChannelsContexts[""]; ok {
+		return nil, fmt.Errorf("empty channel name cannot be used as a key for inner priority channels contexts")
+	}
+	innerPriorityChannelsContextsCopy := make(map[string]context.Context, len(innerPriorityChannelsContexts)+1)
+	innerPriorityChannelsContextsCopy[""] = ctx
+	for k, v := range innerPriorityChannelsContexts {
+		innerPriorityChannelsContextsCopy[k] = v
+	}
+	return newFromPriorityChannelConfig("", *config.PriorityChannel, channelNameToChannel, innerPriorityChannelsContextsCopy)
 }
 
-func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityChannelConfig, channelNameToChannel map[string]<-chan T) (*PriorityChannel[T], error) {
+func newFromPriorityChannelConfig[T any](
+	channelName string,
+	config PriorityChannelConfig,
+	channelNameToChannel map[string]<-chan T,
+	innerPriorityChannelsContexts map[string]context.Context) (*PriorityChannel[T], error) {
 	var options []func(*PriorityChannelOptions)
 	if config.AutoDisableClosedChannels {
 		options = append(options, AutoDisableClosedChannels())
@@ -123,6 +138,11 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 			break
 		}
 	}
+	ctx := context.Background()
+	if innerCtx, ok := innerPriorityChannelsContexts[channelName]; ok {
+		ctx = innerCtx
+	}
+
 	if !isCombinedPriorityChannel {
 		if len(config.Channels) == 1 {
 			c := config.Channels[0]
@@ -176,9 +196,13 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 			var priorityChannel *PriorityChannel[T]
 			var err error
 			if c.PriorityChannelConfig == nil {
-				priorityChannel, err = WrapAsPriorityChannel(context.Background(), c.Name, channelNameToChannel[c.Name], options...)
+				wrappedCtx := context.Background()
+				if innerCtx, ok := innerPriorityChannelsContexts[c.Name]; ok {
+					wrappedCtx = innerCtx
+				}
+				priorityChannel, err = WrapAsPriorityChannel(wrappedCtx, c.Name, channelNameToChannel[c.Name], options...)
 			} else {
-				priorityChannel, err = newFromPriorityChannelConfig[T](context.Background(), *c.PriorityChannelConfig, channelNameToChannel)
+				priorityChannel, err = newFromPriorityChannelConfig[T](c.Name, *c.PriorityChannelConfig, channelNameToChannel, innerPriorityChannelsContexts)
 			}
 			if err != nil {
 				return nil, err
@@ -192,9 +216,13 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 			var priorityChannel *PriorityChannel[T]
 			var err error
 			if c.PriorityChannelConfig == nil {
-				priorityChannel, err = WrapAsPriorityChannel(context.Background(), c.Name, channelNameToChannel[c.Name], options...)
+				wrappedCtx := context.Background()
+				if innerCtx, ok := innerPriorityChannelsContexts[c.Name]; ok {
+					wrappedCtx = innerCtx
+				}
+				priorityChannel, err = WrapAsPriorityChannel(wrappedCtx, c.Name, channelNameToChannel[c.Name], options...)
 			} else {
-				priorityChannel, err = newFromPriorityChannelConfig[T](context.Background(), *c.PriorityChannelConfig, channelNameToChannel)
+				priorityChannel, err = newFromPriorityChannelConfig[T](c.Name, *c.PriorityChannelConfig, channelNameToChannel, innerPriorityChannelsContexts)
 			}
 			if err != nil {
 				return nil, err
@@ -208,9 +236,13 @@ func newFromPriorityChannelConfig[T any](ctx context.Context, config PriorityCha
 			var priorityChannel *PriorityChannel[T]
 			var err error
 			if c.PriorityChannelConfig == nil {
-				priorityChannel, err = WrapAsPriorityChannel(context.Background(), c.Name, channelNameToChannel[c.Name], options...)
+				wrappedCtx := context.Background()
+				if innerCtx, ok := innerPriorityChannelsContexts[c.Name]; ok {
+					wrappedCtx = innerCtx
+				}
+				priorityChannel, err = WrapAsPriorityChannel(wrappedCtx, c.Name, channelNameToChannel[c.Name], options...)
 			} else {
-				priorityChannel, err = newFromPriorityChannelConfig[T](context.Background(), *c.PriorityChannelConfig, channelNameToChannel)
+				priorityChannel, err = newFromPriorityChannelConfig[T](c.Name, *c.PriorityChannelConfig, channelNameToChannel, innerPriorityChannelsContexts)
 			}
 			if err != nil {
 				return nil, err

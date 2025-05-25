@@ -134,6 +134,32 @@ func (s *ByProbability) DisableSelectCase(index int) {
 	s.resetSelectionState()
 }
 
+func (s *ByProbability) EnableSelectCase(index int) {
+	probability, ok := s.disabledCases[index]
+	if !ok {
+		return
+	}
+	delete(s.disabledCases, index)
+	s.insertToSortedProbabilitySelectionsList(&s.pendingProbabilities, probability, index)
+	s.insertToSortedProbabilitySelectionsList(&s.pendingProbabilitiesInitState, probability, index)
+}
+
+func (s *ByProbability) insertToSortedProbabilitySelectionsList(plist *[]probabilitySelection, probability float64, originalIndex int) {
+	list := *plist
+	i := sort.Search(len(list), func(i int) bool {
+		return (probability > list[i].Probability) ||
+			(probability == list[i].Probability && originalIndex > list[i].OriginalIndex)
+	})
+	*plist = append(*plist, probabilitySelection{})
+	list = *plist
+	copy(list[i+1:], list[i:])
+	list[i] = probabilitySelection{
+		Probability:   probability,
+		OriginalIndex: originalIndex,
+	}
+	s.readjustSortedProbabilitySelectionsList(*plist)
+}
+
 func (s *ByProbability) resetSelectionState() {
 	s.currSelectedIndexes = nil
 	s.pendingProbabilities = make([]probabilitySelection, 0, len(s.pendingProbabilitiesInitState))
@@ -157,6 +183,14 @@ func (s *ByProbability) readjustSortedProbabilitySelectionsList(list []probabili
 	}
 	// Adjust last value to 1.0 to avoid floating point errors
 	list[len(list)-1].AdjustedValue = 1.0
+}
+
+func (s *ByProbability) InitializeCopy(probabilities []float64) (interface{}, error) {
+	res := NewByProbability()
+	if err := res.Initialize(probabilities); err != nil {
+		return nil, err
+	}
+	return res, nil
 }
 
 type ByProbabilityFromFreqRatios struct {
@@ -201,4 +235,12 @@ func (s *ByProbability) ByProbabilityFromFreqRatios(freqRatios []interface{}) er
 		return err
 	}
 	return s.Initialize(freqRatiosInt)
+}
+
+func (s *ByProbabilityFromFreqRatios) InitializeCopy(freqRatios []int) (interface{}, error) {
+	res := NewByProbabilityFromFreqRatios()
+	if err := res.Initialize(freqRatios); err != nil {
+		return nil, err
+	}
+	return res, nil
 }

@@ -1,6 +1,7 @@
 {
   "priorityChannel": {
     "method": "by-highest-always-first",
+    "autoDisableClosedChannels": true,
     "channels": [
       {
         "name": "Channel A",

@@ -26,6 +26,7 @@ type DynamicSubStrategy interface {
 	NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool)
 	UpdateOnCaseSelected(index int)
 	DisableSelectCase(index int)
+	EnableSelectCase(index int)
 }
 
 type DynamicByPreconfiguredStrategies struct {
@@ -104,4 +105,18 @@ func (s *DynamicByPreconfiguredStrategies) DisableSelectCase(index int) {
 	for _, s := range s.strategiesByName {
 		s.DisableSelectCase(index)
 	}
+}
+
+func (s *DynamicByPreconfiguredStrategies) EnableSelectCase(index int) {
+	for _, s := range s.strategiesByName {
+		s.EnableSelectCase(index)
+	}
+}
+
+func (s *DynamicByPreconfiguredStrategies) InitializeCopy(weights []map[string]interface{}) (interface{}, error) {
+	res := NewDynamicByPreconfiguredStrategies(s.strategiesByName, s.currentStrategySelector)
+	if err := res.Initialize(weights); err != nil {
+		return nil, err
+	}
+	return res, nil
 }

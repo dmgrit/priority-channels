@@ -2,6 +2,7 @@ package priority_channels
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
 )
@@ -24,6 +25,17 @@ type wrapCompositeChannelWithNameAndWeight[T any, W any] struct {
 
 func (w *wrapCompositeChannelWithNameAndWeight[T, W]) Weight() W {
 	return w.weight
+}
+
+func (w *wrapCompositeChannelWithNameAndWeight[T, W]) CloneChannelWithWeight() selectable.ChannelWithWeight[T, W] {
+	return &wrapCompositeChannelWithNameAndWeight[T, W]{
+		overrideCompositeChannelName: w.overrideCompositeChannelName.Clone(),
+		weight:                       w.weight,
+	}
+}
+
+func (w *wrapCompositeChannelWithNameAndWeight[T, W]) Clone() selectable.Channel[T] {
+	return w.CloneChannelWithWeight()
 }
 
 type overrideCompositeChannelName[T any] struct {
@@ -64,4 +76,36 @@ func (oc *overrideCompositeChannelName[T]) NextSelectCases(upto int) ([]selectab
 
 func (oc *overrideCompositeChannelName[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode, recvOK bool) {
 	oc.channel.UpdateOnCaseSelected(pathInTree, recvOK)
+}
+
+func (oc *overrideCompositeChannelName[T]) RecoverClosedInputChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+	oc.channel.RecoverClosedInputChannel(ch, pathInTree)
+}
+
+func (oc *overrideCompositeChannelName[T]) RecoverClosedInnerPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
+	if len(pathInTree) == 0 {
+		oc.ctx = ctx
+		return
+	}
+	oc.channel.RecoverClosedInnerPriorityChannel(ctx, pathInTree)
+}
+
+func (oc *overrideCompositeChannelName[T]) GetInputAndInnerPriorityChannels(inputChannels map[string]<-chan T, innerPriorityChannels map[string]context.Context) error {
+	if _, ok := innerPriorityChannels[oc.name]; ok {
+		return fmt.Errorf("priority channel name '%s' is used more than once", oc.name)
+	}
+	innerPriorityChannels[oc.name] = oc.ctx
+	return oc.channel.GetInputAndInnerPriorityChannels(inputChannels, innerPriorityChannels)
+}
+
+func (oc *overrideCompositeChannelName[T]) GetInputChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
+	oc.channel.GetInputChannelsPaths(m, currPathInTree)
+}
+
+func (oc *overrideCompositeChannelName[T]) Clone() overrideCompositeChannelName[T] {
+	return overrideCompositeChannelName[T]{
+		ctx:     oc.ctx,
+		name:    oc.name,
+		channel: oc.channel.Clone(),
+	}
 }

@@ -26,3 +26,7 @@ func (l *Lock) TryLockWithContext(ctx context.Context) bool {
 		return false
 	}
 }
+
+func (l *Lock) Channel() chan struct{} {
+	return l.l
+}

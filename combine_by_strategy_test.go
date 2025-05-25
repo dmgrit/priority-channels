@@ -77,10 +77,12 @@ func TestCombineByStrategy_WithHighestFirstPriorityStrategy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error on priority channel intialization: %v", err)
 	}
-	go priority_channels.ProcessPriorityChannelMessages(priorityChannel, msgProcessor)
+	processingDone := make(chan priority_channels.ExitReason)
+	go priority_channels.ProcessPriorityChannelMessages(priorityChannel, msgProcessor, processingDone)
 
 	<-done
 	cancel()
+	<-processingDone
 
 	expectedResults := []*Msg{
 		{Body: "Priority-1000 Msg-1"},

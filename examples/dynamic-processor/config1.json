@@ -1,6 +1,7 @@
 {
   "priorityChannel": {
     "method": "by-frequency-ratio",
+    "autoDisableClosedChannels": false,
     "channels": [
       {
         "name": "Channel A",

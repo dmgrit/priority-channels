@@ -19,7 +19,10 @@ func WrapAsPriorityChannel[T any](ctx context.Context, channelName string, msgsC
 		msgsC:                      msgsC,
 		autoDisableOnClosedChannel: pcOptions.autoDisableClosedChannels,
 	}
-	return newPriorityChannel(ctx, compositeChannel, options...), nil
+	channelNameToChannel := map[string]<-chan T{
+		channelName: msgsC,
+	}
+	return newPriorityChannel(ctx, compositeChannel, channelNameToChannel, options...), nil
 }
 
 type wrappedChannel[T any] struct {
@@ -48,6 +51,40 @@ func (w *wrappedChannel[T]) NextSelectCases(upto int) (selectCases []selectable.
 func (c *wrappedChannel[T]) UpdateOnCaseSelected(pathInTree []selectable.ChannelNode, recvOK bool) {
 	if !recvOK && c.autoDisableOnClosedChannel {
 		c.disabled = true
+	}
+}
+
+func (c *wrappedChannel[T]) RecoverClosedInputChannel(ch <-chan T, pathInTree []selectable.ChannelNode) {
+	if c.disabled {
+		c.disabled = false
+	}
+	c.msgsC = ch
+}
+
+func (c *wrappedChannel[T]) RecoverClosedInnerPriorityChannel(ctx context.Context, pathInTree []selectable.ChannelNode) {
+}
+
+func (c *wrappedChannel[T]) GetInputAndInnerPriorityChannels(inputChannels map[string]<-chan T, innerPriorityChannels map[string]context.Context) error {
+	if _, ok := inputChannels[c.channelName]; ok {
+		return &DuplicateChannelError{ChannelName: c.channelName}
+	}
+	inputChannels[c.channelName] = c.msgsC
+	return nil
+}
+
+func (c *wrappedChannel[T]) GetInputChannelsPaths(m map[string][]selectable.ChannelNode, currPathInTree []selectable.ChannelNode) {
+	if _, ok := m[c.channelName]; !ok {
+		return
+	}
+	m[c.channelName] = currPathInTree
+}
+
+func (c *wrappedChannel[T]) Clone() selectable.Channel[T] {
+	return &wrappedChannel[T]{
+		channelName:                c.channelName,
+		msgsC:                      c.msgsC,
+		autoDisableOnClosedChannel: c.autoDisableOnClosedChannel,
+		disabled:                   c.disabled,
 	}
 }
 

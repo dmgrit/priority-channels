@@ -50,7 +50,7 @@ func TestNewFromConfiguration(t *testing.T) {
 		"channel-4": make(chan string),
 	}
 
-	channel, err := priority_channels.NewFromConfiguration(context.Background(), config, channelNameToChannel)
+	channel, err := priority_channels.NewFromConfiguration(context.Background(), config, channelNameToChannel, nil)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

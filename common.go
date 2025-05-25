@@ -47,7 +47,6 @@ type PriorityChannelOptions struct {
 	autoDisableClosedChannels  bool
 	frequencyMode              *FrequencyMode
 	frequencyMethod            *FrequencyMethod
-	isSynchronized             *bool
 }
 
 const defaultChannelReceiveWaitInterval = 100 * time.Microsecond
@@ -76,22 +75,18 @@ func WithFrequencyMode(mode FrequencyMode) func(opt *PriorityChannelOptions) {
 	}
 }
 
-func Synchronized(val bool) func(opt *PriorityChannelOptions) {
-	return func(opt *PriorityChannelOptions) {
-		opt.isSynchronized = &val
-	}
-}
-
 func ProcessPriorityChannelMessages[T any](
 	msgReceiver *PriorityChannel[T],
-	msgProcessor func(ctx context.Context, msg T, channelName string)) ExitReason {
+	msgProcessor func(ctx context.Context, msg T, channelName string),
+	done chan<- ExitReason) {
 	for {
 		// There is no context per-message, but there is a single context for the entire priority-channel
 		// On receiving the message we do not pass any specific context,
 		// but on processing the message we pass the priority-channel context
 		msg, channelName, status := msgReceiver.ReceiveWithContext(context.Background())
 		if status != ReceiveSuccess {
-			return status.ExitReason()
+			done <- status.ExitReason()
+			return
 		}
 		msgProcessor(msgReceiver.ctx, msg, channelName)
 	}

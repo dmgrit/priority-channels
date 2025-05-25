@@ -144,6 +144,33 @@ func (s *WithStrictOrder) DisableSelectCase(index int) {
 	s.disabledCases[index] = bucket.Capacity
 }
 
+func (s *WithStrictOrder) EnableSelectCase(index int) {
+	freqRatio, ok := s.disabledCases[index]
+	if !ok {
+		return
+	}
+	delete(s.disabledCases, index)
+	bucket := &priorityBucket{
+		OrigChannelIndex: index,
+		Value:            0,
+		Capacity:         freqRatio,
+		LevelIndex:       -1,
+	}
+	s.origIndexToBucket[index] = bucket
+	if len(s.levels) == 0 {
+		s.levels = append(s.levels, &level{})
+	}
+	s.addBucketToLevel(bucket, 0)
+}
+
+func (s *WithStrictOrder) InitializeCopy(freqRatios []int) (interface{}, error) {
+	res := NewWithStrictOrderFully()
+	if err := res.Initialize(freqRatios); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 type priorityBucket struct {
 	Value            int
 	Capacity         int

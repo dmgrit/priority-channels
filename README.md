@@ -39,7 +39,7 @@ The following use cases are supported:
 ### Advanced use cases - dynamic prioritization
 - Dynamic frequency ratio selection from list of [preconfigured ratios](#priority-channel-with-dynamic-frequency-ratio) 
 - Dynamic prioritization strategy selection from list of [preconfigured strategies](#priority-channel-with-dynamic-prioritization-strategy)
-- Dynamic prioritization configuration that can be [fully reconfigured in runtime](#priority-consumer-with-dynamic-priority-channel-that-can-be-reconfigured-in-runtime) 
+- Dynamic prioritization configuration that can be [fully reconfigured in runtime](#reconfiguring-priority-channel-prioritization-configuration-dynamically-in-runtime) 
 
 ### Advanced use cases - selecting frequency method
 - When using priority channels, the [frequency method](#frequency-methods) is selected automatically,
@@ -418,7 +418,7 @@ if err != nil {
     // handle error
 }	
 
-ch, err := priority_channels.NewFromConfiguration[string](ctx, priorityConfiguration, channelNameToChannel)
+ch, err := priority_channels.NewFromConfiguration[string](ctx, priorityConfiguration, channelNameToChannel, nil)
 if err != nil {
     // handle error
 }
@@ -533,7 +533,7 @@ if err != nil {
 }
 ```
 
-### Priority Consumer with dynamic Priority Channel that can be reconfigured in runtime
+### Reconfiguring Priority Channel prioritization configuration dynamically in runtime
 ```go
 customeraC := make(chan string)
 customerbC := make(chan string)
@@ -553,7 +553,64 @@ priorityConfig := priority_channels.Configuration{
     },
 }
 
-consumer, err := priority_channels.NewConsumer(ctx, channelNameToChannel, priorityConfig)
+ch, err := priority_channels.NewFromConfiguration(ctx, priorityConfig, channelNameToChannel, nil)
+if err != nil {
+    // handle error
+}
+
+go func() {
+    for {
+        message, channelName, ok := ch.Receive()
+        if !ok {
+            break
+        }
+        fmt.Printf("%s: %s\n", channelName, message)
+    }
+}()
+
+priorityConfig2 := priority_channels.Configuration{
+    PriorityChannel: &priority_channels.PriorityChannelConfig{
+        Method: priority_channels.ByFrequencyRatioMethodConfig,
+        Channels: []priority_channels.ChannelConfig{
+            {Name: "Customer A", FreqRatio: 1},
+            {Name: "Customer B", FreqRatio: 3},
+        },
+    },
+}
+
+err = ch.UpdatePriorityConfiguration(priorityConfig2, nil)
+if err != nil {
+    // handle error
+}
+```
+
+### Priority Consumer reading from Priority Channel to a Go channel, can be reconfigured in runtime
+```go
+customeraC := make(chan string)
+customerbC := make(chan string)
+
+channelNameToChannel := map[string]<-chan string{
+    "Customer A": customeraC,
+    "Customer B": customerbC,
+}
+
+priorityConfig := priority_channels.Configuration{
+    PriorityChannel: &priority_channels.PriorityChannelConfig{
+        Method: priority_channels.ByFrequencyRatioMethodConfig,
+        Channels: []priority_channels.ChannelConfig{
+            {Name: "Customer A", FreqRatio: 5},
+            {Name: "Customer B", FreqRatio: 1},
+        },
+    },
+}
+
+closureBehavior := priority_channels.ClosureBehavior{
+    InputChannelClosureBehavior:         priority_channels.PauseOnClosed,
+    InnerPriorityChannelClosureBehavior: priority_channels.PauseOnClosed,
+    NoOpenChannelsBehavior:              priority_channels.PauseWhenNoOpenChannels,
+}
+
+consumer, err := priority_channels.NewConsumer(ctx, channelNameToChannel, nil, priorityConfig, closureBehavior)
 if err != nil {
     // handle error
 }
@@ -579,7 +636,7 @@ priorityConfig2 := priority_channels.Configuration{
     },
 }
 
-err = consumer.UpdatePriorityConfiguration(priorityConfig2)
+err = consumer.UpdatePriorityConfiguration(priorityConfig2, nil)
 if err != nil {
     // handle error
 }
@@ -610,6 +667,7 @@ It takes the following properties from the select statement:
 
 It takes the following properties from the Go channel:
 - It is typed - it is used for receiving messages of a specific type
+- It is thread-safe
 - It can be closed - either by canceling the context with which it is initialized or by explicitly calling the Close() method
 - When PriorityChannel is closed, any further `Receive` call immediately returns `ReceivePriorityChannelClosed`
 

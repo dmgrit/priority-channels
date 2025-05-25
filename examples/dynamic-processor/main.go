@@ -28,11 +28,13 @@ func main() {
 
 	var inputChannels []chan string
 	var triggerPauseOrCloseChannels []chan bool
+	var triggerRecoverChannels []chan chan string
 
 	channelsNum := 8
 	for i := 1; i <= channelsNum; i++ {
 		inputChannels = append(inputChannels, make(chan string))
 		triggerPauseOrCloseChannels = append(triggerPauseOrCloseChannels, make(chan bool))
+		triggerRecoverChannels = append(triggerRecoverChannels, make(chan chan string))
 	}
 
 	channelsOrder := map[string]int{
@@ -43,7 +45,9 @@ func main() {
 
 	priorityConfig := priority_channels.Configuration{
 		PriorityChannel: &priority_channels.PriorityChannelConfig{
-			Method: priority_channels.ByFrequencyRatioMethodConfig,
+			Method:                    priority_channels.ByFrequencyRatioMethodConfig,
+			AutoDisableClosedChannels: true,
+			FrequencyMethod:           priority_channels.ProbabilisticByMultipleRandCallsFrequencyMethodConfig,
 			Channels: []priority_channels.ChannelConfig{
 				{Name: "Channel A", FreqRatio: 6},
 				{Name: "Channel B", FreqRatio: 3},
@@ -59,7 +63,7 @@ func main() {
 	}
 
 	for i := 1; i <= channelsNum; i++ {
-		go func(i int) {
+		go func(triggerPauseOrCloseChannel chan bool, inputChannel chan string, triggerRecoverChannel chan chan string) {
 			paused := false
 			closed := false
 			j := 0
@@ -67,49 +71,71 @@ func main() {
 				j++
 				imageName := randString(16)
 				select {
-				case b := <-triggerPauseOrCloseChannels[i-1]:
+				case b := <-triggerPauseOrCloseChannel:
 					if b && !closed {
-						close(inputChannels[i-1])
+						close(inputChannel)
 						closed = true
+					} else if !closed {
+						paused = !paused
 					}
-					paused = !paused
+				case inputChannel = <-triggerRecoverChannel:
+					closed = false
 				default:
 					if !paused && !closed {
 						select {
-						case b := <-triggerPauseOrCloseChannels[i-1]:
+						case b := <-triggerPauseOrCloseChannel:
 							if b && !closed {
-								close(inputChannels[i-1])
+								close(inputChannel)
 								closed = true
+							} else {
+								paused = !paused
 							}
-							paused = !paused
-						case inputChannels[i-1] <- fmt.Sprintf("image-%s-%d", imageName, j):
+						case inputChannel <- fmt.Sprintf("image-%s-%d", imageName, j):
 						}
 					} else {
 						time.Sleep(100 * time.Millisecond)
 					}
 				}
 			}
-		}(i)
+		}(triggerPauseOrCloseChannels[i-1], inputChannels[i-1], triggerRecoverChannels[i-1])
 	}
 
 	receivedMsgs := 0
 	byChannelName := make(map[string]int)
 	var receivedMsgsMutex sync.Mutex
 
-	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, func(d priority_channels.Delivery[string]) {
+	processFn := func(d priority_channels.Delivery[string]) {
 		time.Sleep(100 * time.Millisecond)
 		receivedMsgsMutex.Lock()
 		receivedMsgs++
 		channelName := d.ReceiveDetails.ChannelName
 		byChannelName[channelName] = byChannelName[channelName] + 1
 		receivedMsgsMutex.Unlock()
-	}, channelNameToChannel, priorityConfig, 3)
+	}
+	closureBehavior := priority_channels.ClosureBehavior{
+		InputChannelClosureBehavior:         priority_channels.PauseOnClosed,
+		InnerPriorityChannelClosureBehavior: priority_channels.PauseOnClosed,
+		NoOpenChannelsBehavior:              priority_channels.PauseWhenNoOpenChannels,
+	}
+	wp, err := priority_channels.NewDynamicPriorityProcessor(ctx, channelNameToChannel, nil, priorityConfig, 3, closureBehavior)
 	if err != nil {
 		fmt.Printf("failed to initialize dynamic priority processor: %v\n", err)
 		os.Exit(1)
 	}
 
-	err = wp.Start()
+	notifyCloseCh := make(chan priority_channels.ClosedChannelEvent[string])
+	closedChannelNameToRecoveryFn := make(map[string]struct{})
+	var closedChannelNameToRecoveryFnMtx sync.Mutex
+	go func() {
+		for closedEvent := range notifyCloseCh {
+			closedChannelNameToRecoveryFnMtx.Lock()
+			closedChannelNameToRecoveryFn[closedEvent.ChannelName] = struct{}{}
+			closedChannelNameToRecoveryFnMtx.Unlock()
+		}
+	}()
+	wp.NotifyClose(notifyCloseCh)
+
+	err = wp.Process(processFn)
 	if err != nil {
 		fmt.Printf("failed to start processing messages: %v\n", err)
 		os.Exit(1)
@@ -159,19 +185,25 @@ func main() {
 					}
 				} else {
 					_, _ = f.WriteString("No messages received in the last 5 seconds\n")
-					stopped, reason, channelName := wp.Status()
-					if stopped {
+					status, reason, channelName := wp.Status()
+					if status != priority_channels.Running {
+						var state string
+						if status == priority_channels.Stopped {
+							state = "stopped"
+						} else {
+							state = "paused"
+						}
 						switch reason {
 						case priority_channels.UnknownExitReason:
-							_, _ = f.WriteString("Worker pool stopped: Unknown reason\n")
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Unknown reason\n", state))
 						case priority_channels.ChannelClosed:
-							_, _ = f.WriteString(fmt.Sprintf("Worker pool stopped: Channel '%s' closed\n", channelName))
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Channel '%s' closed\n", state, channelName))
 						case priority_channels.PriorityChannelClosed:
-							_, _ = f.WriteString(fmt.Sprintf("Worker pool stopped: Priority Channel '%s' closed\n", channelName))
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Priority Channel '%s' closed\n", state, channelName))
 						case priority_channels.NoOpenChannels:
-							_, _ = f.WriteString("Worker pool stopped: No open channels\n")
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: No open channels\n", state))
 						case priority_channels.ContextCanceled:
-							_, _ = f.WriteString("Worker pool stopped: Context Canceled\n")
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Context canceled\n", state))
 						}
 					}
 				}
@@ -211,8 +243,36 @@ func main() {
 					triggerPauseOrCloseChannels[2] <- isClose
 					fmt.Printf(operation + " Channel C\n")
 				}
+			case "ra", "rb", "rc":
+				var channelIndex int
+				var channelName string
+				switch words[0] {
+				case "ra":
+					channelIndex = 0
+					channelName = "Channel A"
+				case "rb":
+					channelIndex = 1
+					channelName = "Channel B"
+				case "rc":
+					channelIndex = 2
+					channelName = "Channel C"
+				}
+				closedChannelNameToRecoveryFnMtx.Lock()
+				_, ok := closedChannelNameToRecoveryFn[channelName]
+				if !ok {
+					closedChannelNameToRecoveryFnMtx.Unlock()
+					fmt.Printf("Recovery is not enabled for channel %s\n", channelName)
+					continue
+				}
+				newChannel := make(chan string)
+				inputChannels[channelIndex] = newChannel
+				wp.RecoverClosedInputChannel(channelName, newChannel)
+				delete(closedChannelNameToRecoveryFn, channelName)
+				closedChannelNameToRecoveryFnMtx.Unlock()
+				triggerRecoverChannels[channelIndex] <- newChannel
+				fmt.Printf("Recovering %s\n", channelName)
 			case "quit":
-				wp.StopGracefully()
+				wp.Stop()
 				fmt.Printf("Waiting for all workers to finish...\n")
 				<-wp.Done()
 				fmt.Printf("Processing finished\n")
@@ -243,7 +303,7 @@ func main() {
 				continue
 			}
 
-			if err := wp.UpdatePriorityConfiguration(priorityConfig); err != nil {
+			if err := wp.UpdatePriorityConfiguration(priorityConfig, nil); err != nil {
 				fmt.Printf("failed to update priority consumer configuration: %v\n", err)
 				continue
 			}
