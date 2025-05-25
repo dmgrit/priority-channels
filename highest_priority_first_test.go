@@ -438,9 +438,9 @@ func TestProcessMessagesByPriorityWithHighestAlwaysFirst_AutoDisableClosedChanne
 					if receivedMessagesCount != 60 {
 						t.Errorf("Expected to receive 60 messages, but got %d", receivedMessagesCount)
 					}
-					if status != pc.ReceiveNoOpenChannels {
-						t.Errorf("Expected to receive 'no open channels' status on closure (%v), but got %v",
-							pc.ReceiveNoOpenChannels, status)
+					if status != pc.ReceiveNoReceivablePath {
+						t.Errorf("Expected to receive 'no receivable path' status on closure (%v), but got %v",
+							pc.ReceiveNoReceivablePath, status)
 					}
 					break
 				}

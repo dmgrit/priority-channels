@@ -5,7 +5,7 @@ import "context"
 type ClosureBehavior struct {
 	InputChannelClosureBehavior         ChannelClosureBehavior
 	InnerPriorityChannelClosureBehavior ChannelClosureBehavior
-	NoOpenChannelsBehavior              NoOpenChannelsBehavior
+	NoReceivablePathBehavior            NoReceivablePathBehavior
 }
 
 type ChannelClosureBehavior int
@@ -15,11 +15,11 @@ const (
 	PauseOnClosed
 )
 
-type NoOpenChannelsBehavior int
+type NoReceivablePathBehavior int
 
 const (
-	StopWhenNoOpenChannels NoOpenChannelsBehavior = iota
-	PauseWhenNoOpenChannels
+	StopWhenNoReceivablePath NoReceivablePathBehavior = iota
+	PauseWhenNoReceivablePath
 )
 
 type pauseAndResumer interface {
@@ -51,9 +51,9 @@ func tryAwaitRecovery[T any](behaviour ClosureBehavior, pauser pauseAndResumer, 
 			return awaitRecoverySuccess
 		}
 		return awaitRecoveryCanceled
-	case status == ReceiveNoOpenChannels && behaviour.NoOpenChannelsBehavior == PauseWhenNoOpenChannels:
+	case status == ReceiveNoReceivablePath && behaviour.NoReceivablePathBehavior == PauseWhenNoReceivablePath:
 		pauser.setPaused(status.ExitReason(), "")
-		if priorityChannel.AwaitOpenChannel(context.Background()) {
+		if priorityChannel.AwaitReceivablePath(context.Background()) {
 			pauser.setResumed()
 			return awaitRecoverySuccess
 		}

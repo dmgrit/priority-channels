@@ -143,9 +143,9 @@ func TestProcessMessagesByProbability_AutoDisableClosedChannels(t *testing.T) {
 			if receivedMessagesCount != 200 {
 				t.Errorf("Expected to receive 200 messages, but got %d", receivedMessagesCount)
 			}
-			if status != priority_channels.ReceiveNoOpenChannels {
-				t.Errorf("Expected to receive 'no open channels' status on closure (%v), but got %v",
-					priority_channels.ReceiveNoOpenChannels, status)
+			if status != priority_channels.ReceiveNoReceivablePath {
+				t.Errorf("Expected to receive 'no receivable path' status on closure (%v), but got %v",
+					priority_channels.ReceiveNoReceivablePath, status)
 			}
 			break
 		}

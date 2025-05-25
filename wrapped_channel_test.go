@@ -50,8 +50,8 @@ func TestWrappedClosedChannel_WithAutoDisableOnClosedChannel(t *testing.T) {
 	close(msgsC)
 
 	_, channelName, status := wrappedChannel.ReceiveWithContext(context.Background())
-	if status != priority_channels.ReceiveNoOpenChannels {
-		t.Errorf("Expected status ReceiveNoOpenChannels (%v), but got %v", priority_channels.ReceiveNoOpenChannels, status)
+	if status != priority_channels.ReceiveNoReceivablePath {
+		t.Errorf("Expected status ReceiveNoReceivablePath (%v), but got %v", priority_channels.ReceiveNoReceivablePath, status)
 	}
 	if channelName != "" {
 		t.Errorf("Expected empty priority channel name, but got %s", channelName)
@@ -82,9 +82,9 @@ func TestWrappedChannel_AutoDisableOnClosedChannel(t *testing.T) {
 			if receivedMessagesCount != 20 {
 				t.Errorf("Expected to receive 60 messages, but got %d", receivedMessagesCount)
 			}
-			if status != priority_channels.ReceiveNoOpenChannels {
-				t.Errorf("Expected to receive 'no open channels' status on closure (%v), but got %v",
-					priority_channels.ReceiveNoOpenChannels, status)
+			if status != priority_channels.ReceiveNoReceivablePath {
+				t.Errorf("Expected to receive 'no receivable path' status on closure (%v), but got %v",
+					priority_channels.ReceiveNoReceivablePath, status)
 			}
 			break
 		}

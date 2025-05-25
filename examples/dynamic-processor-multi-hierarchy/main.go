@@ -144,7 +144,7 @@ func main() {
 	closureBehavior := priority_channels.ClosureBehavior{
 		InputChannelClosureBehavior:         priority_channels.PauseOnClosed,
 		InnerPriorityChannelClosureBehavior: priority_channels.PauseOnClosed,
-		NoOpenChannelsBehavior:              priority_channels.PauseWhenNoOpenChannels,
+		NoReceivablePathBehavior:            priority_channels.PauseWhenNoReceivablePath,
 	}
 
 	innerPriorityChannelsContexts, innerPriorityChannelsCancelFuncs := generateInnerPriorityChannelsContextsAndCancelFuncs()
@@ -265,8 +265,8 @@ func main() {
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Channel '%s' closed\n", state, channelName))
 						case priority_channels.PriorityChannelClosed:
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Priority Channel '%s' closed\n", state, channelName))
-						case priority_channels.NoOpenChannels:
-							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: No open channels\n", state))
+						case priority_channels.NoReceivablePath:
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: No receivable path\n", state))
 						case priority_channels.ContextCanceled:
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Context canceled\n", state))
 						}

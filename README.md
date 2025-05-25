@@ -97,7 +97,7 @@ onChannelClosed := func(channelName string) {
 
 onProcessingFinished := func(reason priority_channels.ExitReason) {
     if reason == priority_channels.ContextCanceled || 
-        reason == priority_channels.NoOpenChannels {
+        reason == priority_channels.NoReceivablePath {
         fmt.Printf("Processing has finished, reason %v\n", reason)
     } else {
         fmt.Printf("Processing has finished, unexpected reason %v\n", reason)
@@ -607,7 +607,7 @@ priorityConfig := priority_channels.Configuration{
 closureBehavior := priority_channels.ClosureBehavior{
     InputChannelClosureBehavior:         priority_channels.PauseOnClosed,
     InnerPriorityChannelClosureBehavior: priority_channels.PauseOnClosed,
-    NoOpenChannelsBehavior:              priority_channels.PauseWhenNoOpenChannels,
+    NoReceivablePathBehavior:            priority_channels.PauseWhenNoReceivablePath,
 }
 
 consumer, err := priority_channels.NewConsumer(ctx, channelNameToChannel, nil, priorityConfig, closureBehavior)
@@ -677,7 +677,7 @@ It expands on the select statement by adding the following properties:
 - It can be combined with other priority channels to form a [tree of priority channels](#combination-of-priority-channels-to-multiple-levels-of-hierarchy)
 - The behaviour of closed input channel can be modified by providing `AutoDisableClosedChannels()` option to the constructor
 - If `AutoDisableClosedChannels()` is set, the closed input channel will be silently disabled and will not be selected for receiving messages.
-  Once all input channels are closed, the `Receive` call will return `ReceiveNoOpenChannels` status.
+  Once all input channels are closed, the `Receive` call will return `ReceiveNoReceivablePath` status.
 
 ## Combining priority channels
 

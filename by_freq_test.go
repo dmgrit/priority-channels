@@ -662,9 +662,9 @@ func TestProcessMessagesByFrequencyRatioWithGoroutines_StopsOnClosingAllChannels
 		mtx.Unlock()
 	}
 	onProcessingFinished := func(reason pc.ExitReason) {
-		if reason == pc.NoOpenChannels {
+		if reason == pc.NoReceivablePath {
 			if closedAllChannelsReceived.Load() {
-				t.Errorf("ReceiveNoOpenChannels status received multiple times")
+				t.Errorf("ReceiveNoReceivablePath status received multiple times")
 			}
 			closedAllChannelsReceivedC <- struct{}{}
 		} else {
@@ -679,7 +679,7 @@ func TestProcessMessagesByFrequencyRatioWithGoroutines_StopsOnClosingAllChannels
 
 	select {
 	case <-time.After(10 * time.Second):
-		t.Fatalf("Timeout waiting for ReceiveNoOpenChannels status")
+		t.Fatalf("Timeout waiting for ReceiveNoReceivablePath status")
 	case <-closedAllChannelsReceivedC:
 		closedAllChannelsReceived.Store(true)
 	}
@@ -1433,9 +1433,9 @@ func TestProcessMessagesByFrequencyRatio_AutoDisableClosedChannels(t *testing.T)
 					if receivedMessagesCount != 200 {
 						t.Errorf("Expected to receive 200 messages, but got %d", receivedMessagesCount)
 					}
-					if status != pc.ReceiveNoOpenChannels {
-						t.Errorf("Expected to receive 'no open channels' status on closure (%v), but got %v",
-							pc.ReceiveNoOpenChannels, status)
+					if status != pc.ReceiveNoReceivablePath {
+						t.Errorf("Expected to receive 'no receivable path' status on closure (%v), but got %v",
+							pc.ReceiveNoReceivablePath, status)
 					}
 					break
 				}

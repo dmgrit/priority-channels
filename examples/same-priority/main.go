@@ -133,8 +133,8 @@ func main() {
 					cancel()
 					break
 				}
-			} else if status == priority_channels.ReceiveNoOpenChannels {
-				_, err := f.WriteString("No open channels left\n")
+			} else if status == priority_channels.ReceiveNoReceivablePath {
+				_, err := f.WriteString("No receivable path left\n")
 				if err != nil {
 					fmt.Printf("Failed to write to file: %v\n", err)
 					cancel()

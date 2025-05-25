@@ -80,7 +80,7 @@ func ProcessByFrequencyRatioWithGoroutines[T any](ctx context.Context,
 			return
 		default:
 			if onProcessingFinished != nil {
-				onProcessingFinished(NoOpenChannels)
+				onProcessingFinished(NoReceivablePath)
 			}
 		}
 	}()
