@@ -108,9 +108,13 @@ func (pc *PriorityChannel[T]) NotifyClose(ch chan ClosedChannelEvent[T]) {
 	pc.closedChannelSubscribers = append(pc.closedChannelSubscribers, ch)
 }
 
+type awaitRecoverState struct {
+	recoveredC chan struct{}
+	canAwait   bool
+}
+
 func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName string, channelType ChannelType) bool {
-	var recoveredC chan struct{}
-	var canAwait bool
+	awaitRecoverStateC := make(chan awaitRecoverState, 1)
 
 	pc.applyControlOperation(func() {
 		var closedChannels map[string]*closedChannelState
@@ -119,14 +123,18 @@ func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName stri
 		} else {
 			closedChannels = pc.closedPriorityChannels
 		}
-		var state *closedChannelState
-		state, canAwait = closedChannels[channelName]
+		state, canAwait := closedChannels[channelName]
 		if !canAwait {
-			return
+			awaitRecoverStateC <- awaitRecoverState{canAwait: false}
 		}
-		recoveredC = state.recoveredC
+		awaitRecoverStateC <- awaitRecoverState{
+			recoveredC: state.recoveredC,
+			canAwait:   canAwait,
+		}
 	})
-	if !canAwait {
+
+	state := <-awaitRecoverStateC
+	if !state.canAwait {
 		return true
 	}
 
@@ -135,18 +143,19 @@ func (pc *PriorityChannel[T]) AwaitRecover(ctx context.Context, channelName stri
 		return false
 	case <-ctx.Done():
 		return false
-	case <-recoveredC:
+	case <-state.recoveredC:
 		return true
 	}
 }
 
 func (pc *PriorityChannel[T]) AwaitOpenChannel(ctx context.Context) bool {
-	var waitingForOpenChannelC chan struct{}
+	awaitStateC := make(chan chan struct{}, 1)
 
 	pc.applyControlOperation(func() {
-		waitingForOpenChannelC = pc.waitingForOpenChannelC
+		awaitStateC <- pc.waitingForOpenChannelC
 	})
 
+	waitingForOpenChannelC := <-awaitStateC
 	if waitingForOpenChannelC == nil {
 		return true
 	}
@@ -216,15 +225,17 @@ func (pc *PriorityChannel[T]) RecoverClosedInnerPriorityChannel(channelName stri
 }
 
 func (pc *PriorityChannel[T]) UpdatePriorityConfiguration(priorityConfiguration Configuration, innerPriorityChannelsContexts map[string]context.Context) error {
-	var resErr error
+	resC := make(chan error, 1)
 	pc.applyControlOperation(func() {
 		priorityChannel, err := NewFromConfiguration(pc.ctx, priorityConfiguration, pc.channelNameToChannel, innerPriorityChannelsContexts)
 		if err != nil {
-			resErr = err
+			resC <- err
 			return
 		}
 		pc.doUpdatePriorityConfiguration(priorityChannel)
+		resC <- nil
 	})
+	resErr := <-resC
 	return resErr
 }
 
