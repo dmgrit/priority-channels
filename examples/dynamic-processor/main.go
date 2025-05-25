@@ -198,8 +198,10 @@ func main() {
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Unknown reason\n", state))
 						case priority_channels.InputChannelClosed:
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Channel '%s' closed\n", state, channelName))
+						case priority_channels.InnerPriorityChannelClosed:
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Inner Priority Channel '%s' closed\n", state, channelName))
 						case priority_channels.PriorityChannelClosed:
-							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Priority Channel '%s' closed\n", state, channelName))
+							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: Priority Channel closed\n", state))
 						case priority_channels.NoReceivablePath:
 							_, _ = f.WriteString(fmt.Sprintf("Worker pool %s: No receivable path\n", state))
 						case priority_channels.ContextCanceled:
