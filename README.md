@@ -675,9 +675,11 @@ It expands on the select statement by adding the following properties:
 - Each input channel has a name
 - Each input channel has a weight that determines the priority or frequency ratio of the channel
 - It can be combined with other priority channels to form a [tree of priority channels](#combination-of-priority-channels-to-multiple-levels-of-hierarchy)
-- The behaviour of closed input channel can be modified by providing `AutoDisableClosedChannels()` option to the constructor
+- The behaviour of closed input channels can be modified by providing `AutoDisableClosedChannels()` option to the constructor
 - If `AutoDisableClosedChannels()` is set, the closed input channel will be silently disabled and will not be selected for receiving messages.
   Once all input channels are closed, the `Receive` call will return `ReceiveNoReceivablePath` status.
+- Supports **notification and recovery** of both closed input channels and inner priority channels. 
+- For a full overview of closure handling and recovery, see [channels_closure.md](docs/channels_closure.md)
 
 ## Combining priority channels
 
