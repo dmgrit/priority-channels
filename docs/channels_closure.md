@@ -5,6 +5,27 @@ This library defines three types of channels:
 2. **Inner Priority Channels** -  These are internal channels that form the intermediate **nodes** of the channel tree. They apply prioritization rules and may have their own cancellable context.
 3. **Root Priority Channel** - This is the **top-level** priority channel and serves as the main interface for receiving messages.
 
+There are two modes of operation:
+- **Flat Mode** - All input channels are connected directly to the root priority channel.
+- **Hierarchical Mode** - Input channels connect to inner priority channels, which may further connect to higher-level inner priority channels or directly to the root.
+
+### Constructing Hierarchical Mode
+
+Hierarchical mode can be built in one of two ways:
+
+* **Programmatic Composition**:  
+  Users manually combine PriorityChannel instances to form a tree structure.  
+  Each priority channel has its own context, which can be canceled to close that channel.  
+    
+* **Configuration-Based Initialization**:  
+  The tree of priority channels is automatically constructed from a configuration object.  
+  An optional `innerPriorityChannelsContexts map[string]context.Context` argument can be provided to assign cancellable contexts to inner channels, enabling closure handling.  
+
+Configuration can also be **dynamically updated at runtime**. During such updates:
+* Input channels remain unchanged.
+* Inner priority channels are fully recreated based on the new configuration.
+* The updated configuration accepts the same `innerPriorityChannelsContexts map[string]context.Context` argument, allowing cancellation and closure management for the newly created inner channels.
+
 ## Channel Closure Scenarios
 
 ### Root Priority Channel Closure
@@ -19,7 +40,7 @@ In these cases, further `Receive()` calls will return either:
 * `ReceiveInputChannelClosed` or 
 * `ReceiveInnerPriorityChannelClosed`   
 unless the parent priority channel has `AutoDisableClosedChannels` set to true.
-In that case, the closed channel is automatically disabled, and messages continue flowing from other active channels in the tree. No closure status is returned by `Receive()` in this scenario..
+In that case, the closed channel is automatically disabled, and messages continue flowing from other active channels in the tree. No closure status is returned by `Receive()` in this scenario.
 
 ### When No Receivable Path Remains
 If closures result in **no remaining path** from the root to a live input channel:
@@ -55,7 +76,7 @@ You can wait for channel recovery or the restoration of a receivable path:
 AwaitRecover(ctx context.Context, name string, channelType ChannelType) bool
 AwaitReceivablePath(ctx context.Context) bool
 ```
-* `AwaitRecover` blocks until the specified channel is recovered or the context is canceled..
+* `AwaitRecover` blocks until the specified channel is recovered or the context is canceled.
 * `AwaitReceivablePath` blocks until a receivable path is restored or the context is canceled.
 
 
