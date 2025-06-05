@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/dmgrit/priority-channels/strategies"
 	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
 
@@ -24,7 +25,7 @@ func TestGetFrequencyStrategy(t *testing.T) {
 		mode             *FrequencyMode
 		method           *FrequencyMethod
 		numChannels      int
-		expectedStrategy PrioritizationStrategy[int]
+		expectedStrategy strategies.PrioritizationStrategy[int]
 		expectedError    error
 	}{
 		{

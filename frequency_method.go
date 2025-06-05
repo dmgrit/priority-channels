@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dmgrit/priority-channels/strategies"
 	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
 
@@ -61,7 +62,7 @@ const (
 	levelCombine
 )
 
-func getFrequencyStrategy(level priorityChannelLevel, mode *FrequencyMode, method *FrequencyMethod, numChannels int) (PrioritizationStrategy[int], error) {
+func getFrequencyStrategy(level priorityChannelLevel, mode *FrequencyMode, method *FrequencyMethod, numChannels int) (strategies.PrioritizationStrategy[int], error) {
 	frequencyMode := StrictOrderMode
 	if mode != nil {
 		frequencyMode = *mode

@@ -8,7 +8,7 @@ import (
 )
 
 func NewByStrategy[T any, W any](ctx context.Context,
-	strategy PrioritizationStrategy[W],
+	strategy strategies.PrioritizationStrategy[W],
 	channelsWithWeights []channels.ChannelWithWeight[T, W],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
 	selectableChannels := make([]selectable.ChannelWithWeight[T, W], 0, len(channelsWithWeights))
@@ -18,10 +18,8 @@ func NewByStrategy[T any, W any](ctx context.Context,
 	return newByStrategy(ctx, strategy, selectableChannels, options...)
 }
 
-type PrioritizationStrategy[W any] = strategies.PrioritizationStrategy[W]
-
 func newByStrategy[T any, W any](ctx context.Context,
-	strategy PrioritizationStrategy[W],
+	strategy strategies.PrioritizationStrategy[W],
 	channelsWithWeights []selectable.ChannelWithWeight[T, W],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
 	if err := validateInputChannels(convertChannelsWithWeightsToChannels(channelsWithWeights)); err != nil {
@@ -44,7 +42,7 @@ func newByStrategy[T any, W any](ctx context.Context,
 }
 
 func newCompositeChannelByStrategy[T any, W any](name string,
-	strategy PrioritizationStrategy[W],
+	strategy strategies.PrioritizationStrategy[W],
 	channelsWithWeights []selectable.ChannelWithWeight[T, W],
 	autoDisableClosedChannels bool) (selectable.Channel[T], error) {
 	weights := make([]W, 0, len(channelsWithWeights))
@@ -70,7 +68,7 @@ func newCompositeChannelByStrategy[T any, W any](name string,
 type compositeChannelByPrioritization[T any, W any] struct {
 	channelName               string
 	channels                  []selectable.ChannelWithWeight[T, W]
-	strategy                  PrioritizationStrategy[W]
+	strategy                  strategies.PrioritizationStrategy[W]
 	autoDisableClosedChannels bool
 }
 

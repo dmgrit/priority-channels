@@ -4,10 +4,11 @@ import (
 	"context"
 
 	"github.com/dmgrit/priority-channels/internal/selectable"
+	"github.com/dmgrit/priority-channels/strategies"
 )
 
 func CombineByStrategy[T any, W any](ctx context.Context,
-	strategy PrioritizationStrategy[W],
+	strategy strategies.PrioritizationStrategy[W],
 	priorityChannelsWithWeight []PriorityChannelWithWeight[T, W],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
 	channels := toSelectableChannelsWithWeight[T](priorityChannelsWithWeight)

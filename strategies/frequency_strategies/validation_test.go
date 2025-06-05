@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/dmgrit/priority-channels"
 	"github.com/dmgrit/priority-channels/strategies"
 	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
@@ -13,7 +12,7 @@ import (
 func TestInitialization(t *testing.T) {
 	var testCases = []struct {
 		Name     string
-		Strategy priority_channels.PrioritizationStrategy[int]
+		Strategy strategies.PrioritizationStrategy[int]
 	}{
 		{
 			Name:     "WithStrictOrderFully",
@@ -36,7 +35,7 @@ func TestInitialization(t *testing.T) {
 	}
 }
 
-func testFrequencyStrategyInitialization(t *testing.T, strategy priority_channels.PrioritizationStrategy[int]) {
+func testFrequencyStrategyInitialization(t *testing.T, strategy strategies.PrioritizationStrategy[int]) {
 	testCases := []struct {
 		Name          string
 		Weights       []int

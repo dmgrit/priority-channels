@@ -5,7 +5,6 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/dmgrit/priority-channels"
 	"github.com/dmgrit/priority-channels/strategies"
 	"github.com/dmgrit/priority-channels/strategies/frequency_strategies"
 )
@@ -13,7 +12,7 @@ import (
 func TestWithStrictOrderAcrossCycles(t *testing.T) {
 	testCases := []struct {
 		name       string
-		strategy   priority_channels.PrioritizationStrategy[int]
+		strategy   strategies.PrioritizationStrategy[int]
 		assertFunc assertNextIndexesFunc
 	}{
 		{
@@ -35,7 +34,7 @@ func TestWithStrictOrderAcrossCycles(t *testing.T) {
 	}
 }
 
-func testWithStrictOrderAcrossCycles(t *testing.T, s priority_channels.PrioritizationStrategy[int], assert assertNextIndexesFunc) {
+func testWithStrictOrderAcrossCycles(t *testing.T, s strategies.PrioritizationStrategy[int], assert assertNextIndexesFunc) {
 	err := s.Initialize([]int{1, 2, 3, 4, 5})
 	if err != nil {
 		t.Fatalf("Unexpected error on initialization: %v", err)
