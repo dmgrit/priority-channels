@@ -185,28 +185,28 @@ func main() {
 		switch upperLine {
 		case "A":
 			triggerPauseOrCloseChannels[0] <- isClose
-			fmt.Printf(operation + " Channel A\n")
+			fmt.Printf("%s Channel A\n", operation)
 		case "B1":
 			triggerPauseOrCloseChannels[1] <- isClose
-			fmt.Printf(operation + " Channel B1\n")
+			fmt.Printf("%s Channel B1\n", operation)
 		case "B2":
 			triggerPauseOrCloseChannels[2] <- isClose
-			fmt.Printf(operation + " Channel B2\n")
+			fmt.Printf("%s Channel B2\n", operation)
 		case "B3":
 			triggerPauseOrCloseChannels[3] <- isClose
-			fmt.Printf(operation + " Channel B3\n")
+			fmt.Printf("%s Channel B3\n", operation)
 		case "C":
 			triggerPauseOrCloseChannels[4] <- isClose
-			fmt.Printf(operation + " Channel C\n")
+			fmt.Printf("%s Channel C\n", operation)
 		case "D1":
 			triggerPauseOrCloseChannels[5] <- isClose
-			fmt.Printf(operation + " Channel D1\n")
+			fmt.Printf("%s Channel D1\n", operation)
 		case "D2":
 			triggerPauseOrCloseChannels[6] <- isClose
-			fmt.Printf(operation + " Channel D2\n")
+			fmt.Printf("%s Channel D2\n", operation)
 		case "E":
 			triggerPauseOrCloseChannels[7] <- isClose
-			fmt.Printf(operation + " Channel E\n")
+			fmt.Printf("%s Channel E\n", operation)
 		case "0":
 			fmt.Printf("Exiting\n")
 			cancel()

@@ -18,14 +18,7 @@ func NewByStrategy[T any, W any](ctx context.Context,
 	return newByStrategy(ctx, strategy, selectableChannels, options...)
 }
 
-type PrioritizationStrategy[W any] interface {
-	Initialize(weights []W) error
-	InitializeCopy(weights []W) (interface{}, error)
-	NextSelectCasesRankedIndexes(upto int) ([]strategies.RankedIndex, bool)
-	UpdateOnCaseSelected(index int)
-	DisableSelectCase(index int)
-	EnableSelectCase(index int)
-}
+type PrioritizationStrategy[W any] = strategies.PrioritizationStrategy[W]
 
 func newByStrategy[T any, W any](ctx context.Context,
 	strategy PrioritizationStrategy[W],
@@ -218,6 +211,6 @@ func (c *compositeChannelByPrioritization[T, W]) Clone() selectable.Channel[T] {
 		weights = append(weights, ch.Weight())
 	}
 	strategyInterface, _ := c.strategy.InitializeCopy(weights)
-	res.strategy = strategyInterface.(PrioritizationStrategy[W])
+	res.strategy = strategyInterface
 	return res
 }

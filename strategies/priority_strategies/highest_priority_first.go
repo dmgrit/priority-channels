@@ -303,7 +303,7 @@ func (s *HighestAlwaysFirst) getSortedIndexByOriginalIndex(index int) int {
 	return sortedIndex
 }
 
-func (s *HighestAlwaysFirst) InitializeCopy(priorities []int) (interface{}, error) {
+func (s *HighestAlwaysFirst) InitializeCopy(priorities []int) (strategies.PrioritizationStrategy[int], error) {
 	res := NewByHighestAlwaysFirst()
 	res.frequencyStrategyGenerator = s.frequencyStrategyGenerator
 	if err := res.Initialize(priorities); err != nil {

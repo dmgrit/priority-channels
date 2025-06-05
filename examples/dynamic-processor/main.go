@@ -237,13 +237,13 @@ func main() {
 				switch words[0] {
 				case "a":
 					triggerPauseOrCloseChannels[0] <- isClose
-					fmt.Printf(operation + " Channel A\n")
+					fmt.Printf("%s Channel A\n", operation)
 				case "b":
 					triggerPauseOrCloseChannels[1] <- isClose
-					fmt.Printf(operation + " Channel B\n")
+					fmt.Printf("%s Channel B\n", operation)
 				case "c":
 					triggerPauseOrCloseChannels[2] <- isClose
-					fmt.Printf(operation + " Channel C\n")
+					fmt.Printf("%s Channel C\n", operation)
 				}
 			case "ra", "rb", "rc":
 				var channelIndex int

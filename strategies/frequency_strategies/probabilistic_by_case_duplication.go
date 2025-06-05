@@ -95,7 +95,7 @@ func (s *ProbabilisticByCaseDuplication) EnableSelectCase(index int) {
 	}
 }
 
-func (s *ProbabilisticByCaseDuplication) InitializeCopy(freqRatios []int) (interface{}, error) {
+func (s *ProbabilisticByCaseDuplication) InitializeCopy(freqRatios []int) (strategies.PrioritizationStrategy[int], error) {
 	res := NewProbabilisticByCaseDuplication()
 	if err := res.Initialize(freqRatios); err != nil {
 		return nil, err

@@ -62,5 +62,5 @@ func TestNewFromConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal config: %v", err)
 	}
-	t.Logf(string(jsonConfig))
+	t.Log(string(jsonConfig))
 }

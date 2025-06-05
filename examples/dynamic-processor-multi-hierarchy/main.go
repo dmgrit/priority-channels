@@ -373,22 +373,22 @@ func main() {
 		case "A", "NA":
 			triggerPauseChannels[0] <- value
 			triggerPauseChannels[1] <- value
-			fmt.Printf(operation + " receiving messages for Customer A\n")
+			fmt.Printf("%s receiving messages for Customer A\n", operation)
 		case "B", "NB":
 			triggerPauseChannels[2] <- value
 			triggerPauseChannels[3] <- value
-			fmt.Printf(operation + " receiving messages for Customer B\n")
+			fmt.Printf("%s receiving messages for Customer B\n", operation)
 		case "H", "NH":
 			triggerPauseChannels[0] <- value
 			triggerPauseChannels[2] <- value
-			fmt.Printf(operation + " receiving High Priority messages\n")
+			fmt.Printf("%s receiving High Priority messages\n", operation)
 		case "L", "NL":
 			triggerPauseChannels[1] <- value
 			triggerPauseChannels[3] <- value
-			fmt.Printf(operation + " receiving Low Priority messages\n")
+			fmt.Printf("%s receiving Low Priority messages\n", operation)
 		case "U", "NU":
 			triggerPauseChannels[4] <- value
-			fmt.Printf(operation + " receiving Urgent messages\n")
+			fmt.Printf("%s receiving Urgent messages\n", operation)
 		case "RA":
 			fmt.Printf("Recovering Priority Channel of Customer A\n")
 			newCtx, cancelFunc := context.WithCancel(context.Background())

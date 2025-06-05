@@ -367,9 +367,9 @@ func (s *byFirstDecimalDigit) EnableSelectCase(index int) {
 	// to be implemented
 }
 
-func (s *byFirstDecimalDigit) InitializeCopy(priorities []float64) (interface{}, error) {
-	res := make([]sortedToOriginalIndex, 0, len(priorities))
-	if err := s.Initialize(priorities); err != nil {
+func (s *byFirstDecimalDigit) InitializeCopy(priorities []float64) (strategies.PrioritizationStrategy[float64], error) {
+	res := newByFirstDecimalDigitAsc()
+	if err := res.Initialize(priorities); err != nil {
 		return nil, err
 	}
 	return res, nil

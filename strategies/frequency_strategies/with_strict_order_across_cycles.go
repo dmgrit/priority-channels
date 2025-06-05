@@ -119,7 +119,7 @@ func (s *WithStrictOrderAcrossCycles) EnableSelectCase(index int) {
 	s.addBucketToLevel(bucketNode, firstLevel)
 }
 
-func (s *WithStrictOrderAcrossCycles) InitializeCopy(freqRatios []int) (interface{}, error) {
+func (s *WithStrictOrderAcrossCycles) InitializeCopy(freqRatios []int) (strategies.PrioritizationStrategy[int], error) {
 	res := NewWithStrictOrderAcrossCycles()
 	if err := res.Initialize(freqRatios); err != nil {
 		return nil, err

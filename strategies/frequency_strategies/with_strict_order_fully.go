@@ -163,7 +163,7 @@ func (s *WithStrictOrder) EnableSelectCase(index int) {
 	s.addBucketToLevel(bucket, 0)
 }
 
-func (s *WithStrictOrder) InitializeCopy(freqRatios []int) (interface{}, error) {
+func (s *WithStrictOrder) InitializeCopy(freqRatios []int) (strategies.PrioritizationStrategy[int], error) {
 	res := NewWithStrictOrderFully()
 	if err := res.Initialize(freqRatios); err != nil {
 		return nil, err

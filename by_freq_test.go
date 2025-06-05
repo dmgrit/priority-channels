@@ -752,7 +752,7 @@ func TestProcessMessagesByFrequencyRatio_TenThousandMessages2(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf(tc.Method+"-"+tc.MessagesRate), func(t *testing.T) {
+		t.Run(tc.Method+"-"+tc.MessagesRate, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var inputChannels []chan string
@@ -1081,7 +1081,7 @@ func TestProcessMessagesByFrequencyRatio_TenThousandMessages4(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf(tc.Method+"-"+tc.MessagesRate), func(t *testing.T) {
+		t.Run(tc.Method+"-"+tc.MessagesRate, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var inputChannels []chan string
