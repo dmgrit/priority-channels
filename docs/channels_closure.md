@@ -45,7 +45,8 @@ In that case, the closed channel is automatically disabled, and messages continu
 ### When No Receivable Path Remains
 If closures result in **no remaining path** from the root to a live input channel:
 - In flat mode, this happens when all input channels are closed
-- In hierarchical mode, this can happen due to a combination of closed input and inner priority channels.
+- In hierarchical mode, this can happen due to a combination of closed input and inner priority channels.  
+  
 In both cases, `Receive()` returns a `ReceiveNoReceivablePath` status.
 
 ## Notification and Recovery
