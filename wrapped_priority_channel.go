@@ -7,35 +7,12 @@ import (
 	"github.com/dmgrit/priority-channels/internal/selectable"
 )
 
-func asSelectableChannelWithWeight[T any, W any](pc *PriorityChannel[T], name string, weight W) selectable.ChannelWithWeight[T, W] {
-	return &wrapCompositeChannelWithNameAndWeight[T, W]{
-		overrideCompositeChannelName: overrideCompositeChannelName[T]{
-			ctx:     pc.ctx,
-			name:    name,
-			channel: pc.compositeChannel,
-		},
-		weight: weight,
+func asSelectableChannelWithName[T any](pc *PriorityChannel[T], name string) selectable.Channel[T] {
+	return &overrideCompositeChannelName[T]{
+		ctx:     pc.ctx,
+		name:    name,
+		channel: pc.compositeChannel,
 	}
-}
-
-type wrapCompositeChannelWithNameAndWeight[T any, W any] struct {
-	overrideCompositeChannelName[T]
-	weight W
-}
-
-func (w *wrapCompositeChannelWithNameAndWeight[T, W]) Weight() W {
-	return w.weight
-}
-
-func (w *wrapCompositeChannelWithNameAndWeight[T, W]) CloneChannelWithWeight() selectable.ChannelWithWeight[T, W] {
-	return &wrapCompositeChannelWithNameAndWeight[T, W]{
-		overrideCompositeChannelName: w.overrideCompositeChannelName.Clone(),
-		weight:                       w.weight,
-	}
-}
-
-func (w *wrapCompositeChannelWithNameAndWeight[T, W]) Clone() selectable.Channel[T] {
-	return w.CloneChannelWithWeight()
 }
 
 type overrideCompositeChannelName[T any] struct {
@@ -102,8 +79,8 @@ func (oc *overrideCompositeChannelName[T]) GetInputChannelsPaths(m map[string][]
 	oc.channel.GetInputChannelsPaths(m, currPathInTree)
 }
 
-func (oc *overrideCompositeChannelName[T]) Clone() overrideCompositeChannelName[T] {
-	return overrideCompositeChannelName[T]{
+func (oc *overrideCompositeChannelName[T]) Clone() selectable.Channel[T] {
+	return &overrideCompositeChannelName[T]{
 		ctx:     oc.ctx,
 		name:    oc.name,
 		channel: oc.channel.Clone(),

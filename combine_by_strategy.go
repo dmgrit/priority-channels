@@ -11,8 +11,8 @@ func CombineByStrategy[T any, W any](ctx context.Context,
 	strategy strategies.PrioritizationStrategy[W],
 	priorityChannelsWithWeight []PriorityChannelWithWeight[T, W],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
-	channels := toSelectableChannelsWithWeight[T](priorityChannelsWithWeight)
-	return newByStrategy(ctx, strategy, channels, options...)
+	channels, channelsWeights := toSelectableChannelsWithWeight[T](priorityChannelsWithWeight)
+	return newByStrategy(ctx, strategy, channels, channelsWeights, options...)
 }
 
 type PriorityChannelWithWeight[T any, W any] struct {
@@ -42,11 +42,13 @@ func NewPriorityChannelWithWeight[T any, W any](name string, priorityChannel *Pr
 }
 
 func toSelectableChannelsWithWeight[T any, W any](
-	priorityChannelsWithWeight []PriorityChannelWithWeight[T, W]) []selectable.ChannelWithWeight[T, W] {
-	res := make([]selectable.ChannelWithWeight[T, W], 0, len(priorityChannelsWithWeight))
-	for _, q := range priorityChannelsWithWeight {
-		priorityChannel := q.PriorityChannel().clone()
-		res = append(res, asSelectableChannelWithWeight(priorityChannel, q.Name(), q.Weight()))
+	priorityChannelsWithWeight []PriorityChannelWithWeight[T, W]) ([]selectable.Channel[T], []W) {
+	res := make([]selectable.Channel[T], 0, len(priorityChannelsWithWeight))
+	resWeights := make([]W, 0, len(priorityChannelsWithWeight))
+	for _, c := range priorityChannelsWithWeight {
+		priorityChannel := c.PriorityChannel().clone()
+		res = append(res, asSelectableChannelWithName(priorityChannel, c.Name()))
+		resWeights = append(resWeights, c.Weight())
 	}
-	return res
+	return res, resWeights
 }

@@ -15,11 +15,11 @@ func NewByHighestAlwaysFirst[T any](ctx context.Context,
 	for _, option := range options {
 		option(pcOptions)
 	}
-	selectableChannels := make([]selectable.ChannelWithWeight[T, int], 0, len(channelsWithPriorities))
+	selectableChannels := make([]selectable.Channel[T], 0, len(channelsWithPriorities))
+	selectableChannelsWeights := make([]int, 0, len(channelsWithPriorities))
 	for _, c := range channelsWithPriorities {
-		selectableChannels = append(selectableChannels, selectable.NewChannelWithWeight(
-			channels.NewChannelWithWeight[T, int](c.ChannelName(), c.MsgsC(), c.Priority()),
-		))
+		selectableChannels = append(selectableChannels, selectable.NewFromInputChannel(c.ChannelName(), c.MsgsC()))
+		selectableChannelsWeights = append(selectableChannelsWeights, c.Priority())
 	}
 	_, err := getFrequencyStrategy(levelNew, pcOptions.frequencyMode, pcOptions.frequencyMethod, len(selectableChannels))
 	if err != nil {
@@ -29,5 +29,5 @@ func NewByHighestAlwaysFirst[T any](ctx context.Context,
 		frequencyStrategy, _ := getFrequencyStrategy(levelNew, pcOptions.frequencyMode, pcOptions.frequencyMethod, numChannels)
 		return frequencyStrategy
 	}))
-	return newByStrategy(ctx, strategy, selectableChannels, options...)
+	return newByStrategy(ctx, strategy, selectableChannels, selectableChannelsWeights, options...)
 }

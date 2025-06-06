@@ -24,13 +24,13 @@ func NewByFrequencyRatio[T any](ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	selectableChannels := make([]selectable.ChannelWithWeight[T, int], 0, len(channelsWithFreqRatios))
+	selectableChannels := make([]selectable.Channel[T], 0, len(channelsWithFreqRatios))
+	selectableChannelsWeights := make([]int, 0, len(channelsWithFreqRatios))
 	for _, c := range channelsWithFreqRatios {
-		selectableChannels = append(selectableChannels, selectable.NewChannelWithWeight(
-			channels.NewChannelWithWeight[T, int](c.ChannelName(), c.MsgsC(), c.FreqRatio()),
-		))
+		selectableChannels = append(selectableChannels, selectable.NewFromInputChannel(c.ChannelName(), c.MsgsC()))
+		selectableChannelsWeights = append(selectableChannelsWeights, c.FreqRatio())
 	}
-	return newByStrategy(ctx, strategy, selectableChannels, options...)
+	return newByStrategy(ctx, strategy, selectableChannels, selectableChannelsWeights, options...)
 }
 
 func ProcessByFrequencyRatioWithGoroutines[T any](ctx context.Context,

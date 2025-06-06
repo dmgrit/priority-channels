@@ -51,7 +51,7 @@ func validateInputChannels(channels []channelWithName) error {
 	return nil
 }
 
-func convertChannelsWithWeightsToChannels[T any, W any](channelsWithWeights []selectable.ChannelWithWeight[T, W]) []channelWithName {
+func convertSelectableChannelsToChannels[T any](channelsWithWeights []selectable.Channel[T]) []channelWithName {
 	res := make([]channelWithName, 0, len(channelsWithWeights))
 	for _, c := range channelsWithWeights {
 		res = append(res, c)
