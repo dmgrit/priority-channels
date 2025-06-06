@@ -23,17 +23,26 @@ func (e *UnknownStrategyError) Error() string {
 
 type DynamicSubStrategy interface {
 	InitializeWithTypeAssertion(weights []interface{}) error
+	InitializeCopyAsDynamicSubStrategy() DynamicSubStrategy
 	NextSelectCasesRankedIndexes(upto int) ([]RankedIndex, bool)
 	UpdateOnCaseSelected(index int)
 	DisableSelectCase(index int)
 	EnableSelectCase(index int)
 }
 
+func InitializeCopyAsDynamicSubStrategy[W any](s PrioritizationStrategy[W]) DynamicSubStrategy {
+	strategyCopy := s.InitializeCopy()
+	res, ok := strategyCopy.(DynamicSubStrategy)
+	if !ok {
+		return nil
+	}
+	return res
+}
+
 type DynamicByPreconfiguredStrategies struct {
-	strategiesByName          map[string]DynamicSubStrategy
-	currentStrategyName       string
-	currentStrategySelector   func() string
-	origWeightsByStrategyName map[string][]interface{}
+	strategiesByName        map[string]DynamicSubStrategy
+	currentStrategyName     string
+	currentStrategySelector func() string
 }
 
 func NewDynamicByPreconfiguredStrategies(
@@ -46,24 +55,34 @@ func NewDynamicByPreconfiguredStrategies(
 }
 
 func (s *DynamicByPreconfiguredStrategies) Initialize(weights []map[string]interface{}) error {
-	s.origWeightsByStrategyName = make(map[string][]interface{})
+	origWeightsByStrategyName := make(map[string][]interface{})
 
 	for channelIndex, weightByStrategyName := range weights {
 		if err := s.validateChannelWeightsStrategies(channelIndex, weightByStrategyName); err != nil {
 			return err
 		}
 		for strategyName, weight := range weightByStrategyName {
-			s.origWeightsByStrategyName[strategyName] = append(s.origWeightsByStrategyName[strategyName], weight)
+			origWeightsByStrategyName[strategyName] = append(origWeightsByStrategyName[strategyName], weight)
 		}
 	}
 
 	for strategyName, strategy := range s.strategiesByName {
-		if err := strategy.InitializeWithTypeAssertion(s.origWeightsByStrategyName[strategyName]); err != nil {
+		if err := strategy.InitializeWithTypeAssertion(origWeightsByStrategyName[strategyName]); err != nil {
 			return err
 		}
 	}
 	s.currentStrategyName = s.currentStrategySelector()
 	return nil
+}
+
+func (s *DynamicByPreconfiguredStrategies) InitializeCopy() PrioritizationStrategy[map[string]interface{}] {
+	copyStrategies := make(map[string]DynamicSubStrategy, len(s.strategiesByName))
+	for name, strategy := range s.strategiesByName {
+		copyStrategies[name] = strategy.InitializeCopyAsDynamicSubStrategy()
+	}
+	res := NewDynamicByPreconfiguredStrategies(copyStrategies, s.currentStrategySelector)
+	res.currentStrategyName = s.currentStrategyName
+	return res
 }
 
 func (s *DynamicByPreconfiguredStrategies) validateChannelWeightsStrategies(channelIndex int, weightByStrategyName map[string]interface{}) error {
@@ -111,12 +130,4 @@ func (s *DynamicByPreconfiguredStrategies) EnableSelectCase(index int) {
 	for _, s := range s.strategiesByName {
 		s.EnableSelectCase(index)
 	}
-}
-
-func (s *DynamicByPreconfiguredStrategies) InitializeCopy(weights []map[string]interface{}) (PrioritizationStrategy[map[string]interface{}], error) {
-	res := NewDynamicByPreconfiguredStrategies(s.strategiesByName, s.currentStrategySelector)
-	if err := res.Initialize(weights); err != nil {
-		return nil, err
-	}
-	return res, nil
 }

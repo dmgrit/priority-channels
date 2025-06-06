@@ -302,6 +302,7 @@ func TestProcessMessagesByDynamicStrategy_TypeAssertion(t *testing.T) {
 
 type byFirstDecimalDigit struct {
 	sortedPriorities []sortedToOriginalIndex
+	origPriorities   []float64
 }
 
 type sortedToOriginalIndex struct {
@@ -314,6 +315,7 @@ func newByFirstDecimalDigitAsc() *byFirstDecimalDigit {
 }
 
 func (s *byFirstDecimalDigit) Initialize(priorities []float64) error {
+	s.origPriorities = make([]float64, 0, len(priorities))
 	s.sortedPriorities = make([]sortedToOriginalIndex, 0, len(priorities))
 	for i, p := range priorities {
 		if p < 0 {
@@ -322,6 +324,7 @@ func (s *byFirstDecimalDigit) Initialize(priorities []float64) error {
 				Err:          priority_strategies.ErrPriorityIsNegative,
 			}
 		}
+		s.origPriorities = append(s.origPriorities, p)
 		firstDecimalDigit := int(p*10) % 10
 		s.sortedPriorities = append(s.sortedPriorities, sortedToOriginalIndex{
 			FirstDecimalDigit: firstDecimalDigit,
@@ -367,10 +370,15 @@ func (s *byFirstDecimalDigit) EnableSelectCase(index int) {
 	// to be implemented
 }
 
-func (s *byFirstDecimalDigit) InitializeCopy(priorities []float64) (strategies.PrioritizationStrategy[float64], error) {
-	res := newByFirstDecimalDigitAsc()
-	if err := res.Initialize(priorities); err != nil {
-		return nil, err
+func (s *byFirstDecimalDigit) InitializeCopy() strategies.PrioritizationStrategy[float64] {
+	if len(s.origPriorities) == 0 {
+		return nil
 	}
-	return res, nil
+	res := newByFirstDecimalDigitAsc()
+	_ = res.Initialize(s.origPriorities)
+	return res
+}
+
+func (s *byFirstDecimalDigit) InitializeCopyAsDynamicSubStrategy() strategies.DynamicSubStrategy {
+	return strategies.InitializeCopyAsDynamicSubStrategy(s)
 }

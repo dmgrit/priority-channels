@@ -45,12 +45,12 @@ func (s *ByProbability) Initialize(probabilities []float64) error {
 				Err:          ErrProbabilityIsInvalid,
 			}
 		}
+		s.origProbabilities = append(s.origProbabilities, p)
 		probSum += p
 		s.pendingProbabilities = append(s.pendingProbabilities, probabilitySelection{
 			Probability:   p,
 			OriginalIndex: i,
 		})
-		s.origProbabilities = append(s.origProbabilities, p)
 	}
 	if probSum != 1.0 {
 		return ErrProbabilitiesMustSumToOne
@@ -185,15 +185,21 @@ func (s *ByProbability) readjustSortedProbabilitySelectionsList(list []probabili
 	list[len(list)-1].AdjustedValue = 1.0
 }
 
-func (s *ByProbability) InitializeCopy(probabilities []float64) (strategies.PrioritizationStrategy[float64], error) {
-	res := NewByProbability()
-	if err := res.Initialize(probabilities); err != nil {
-		return nil, err
+func (s *ByProbability) InitializeCopy() strategies.PrioritizationStrategy[float64] {
+	if len(s.origProbabilities) == 0 {
+		return nil
 	}
-	return res, nil
+	res := NewByProbability()
+	_ = res.Initialize(s.origProbabilities)
+	return res
+}
+
+func (s *ByProbability) InitializeCopyAsDynamicSubStrategy() strategies.DynamicSubStrategy {
+	return strategies.InitializeCopyAsDynamicSubStrategy[float64](s)
 }
 
 type ByProbabilityFromFreqRatios struct {
+	origFreqRatios []int
 	*ByProbability
 }
 
@@ -204,6 +210,7 @@ func NewByProbabilityFromFreqRatios() *ByProbabilityFromFreqRatios {
 }
 
 func (s *ByProbabilityFromFreqRatios) Initialize(freqRatios []int) error {
+	s.origFreqRatios = make([]int, 0, len(freqRatios))
 	probabilitiesFloat64 := make([]float64, 0, len(freqRatios))
 	totalSum := 0.0
 	for i, freqRatio := range freqRatios {
@@ -213,6 +220,7 @@ func (s *ByProbabilityFromFreqRatios) Initialize(freqRatios []int) error {
 				Err:          ErrFreqRatioMustBeGreaterThanZero,
 			}
 		}
+		s.origFreqRatios = append(s.origFreqRatios, freqRatio)
 		totalSum += float64(freqRatio)
 	}
 	accSum := 0.0
@@ -237,10 +245,15 @@ func (s *ByProbability) ByProbabilityFromFreqRatios(freqRatios []interface{}) er
 	return s.Initialize(freqRatiosInt)
 }
 
-func (s *ByProbabilityFromFreqRatios) InitializeCopy(freqRatios []int) (strategies.PrioritizationStrategy[int], error) {
-	res := NewByProbabilityFromFreqRatios()
-	if err := res.Initialize(freqRatios); err != nil {
-		return nil, err
+func (s *ByProbabilityFromFreqRatios) InitializeCopy() strategies.PrioritizationStrategy[int] {
+	if len(s.origFreqRatios) == 0 {
+		return nil
 	}
-	return res, nil
+	res := NewByProbabilityFromFreqRatios()
+	_ = res.Initialize(s.origFreqRatios)
+	return res
+}
+
+func (s *ByProbabilityFromFreqRatios) InitializeCopyAsDynamicSubStrategy() strategies.DynamicSubStrategy {
+	return strategies.InitializeCopyAsDynamicSubStrategy[int](s)
 }

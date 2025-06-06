@@ -141,7 +141,7 @@ func WithFrequencyStrategyGenerator(frequencyStrategyGenerator FrequencyStrategy
 }
 
 func (s *HighestAlwaysFirst) Initialize(priorities []int) error {
-	s.origPriorities = priorities
+	s.origPriorities = make([]int, 0, len(priorities))
 	s.sortedPriorities = make([]sortedToOriginalIndex, 0, len(priorities))
 	for i, p := range priorities {
 		if p < 0 {
@@ -150,6 +150,7 @@ func (s *HighestAlwaysFirst) Initialize(priorities []int) error {
 				Err:          ErrPriorityIsNegative,
 			}
 		}
+		s.origPriorities = append(s.origPriorities, p)
 		s.sortedPriorities = append(s.sortedPriorities, sortedToOriginalIndex{
 			Priority:      p,
 			OriginalIndex: i,
@@ -303,11 +304,16 @@ func (s *HighestAlwaysFirst) getSortedIndexByOriginalIndex(index int) int {
 	return sortedIndex
 }
 
-func (s *HighestAlwaysFirst) InitializeCopy(priorities []int) (strategies.PrioritizationStrategy[int], error) {
+func (s *HighestAlwaysFirst) InitializeCopy() strategies.PrioritizationStrategy[int] {
+	if len(s.origPriorities) == 0 {
+		return nil
+	}
 	res := NewByHighestAlwaysFirst()
 	res.frequencyStrategyGenerator = s.frequencyStrategyGenerator
-	if err := res.Initialize(priorities); err != nil {
-		return nil, err
-	}
-	return res, nil
+	_ = res.Initialize(s.origPriorities)
+	return res
+}
+
+func (s *HighestAlwaysFirst) InitializeCopyAsDynamicSubStrategy() strategies.DynamicSubStrategy {
+	return strategies.InitializeCopyAsDynamicSubStrategy(s)
 }

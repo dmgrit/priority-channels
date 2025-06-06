@@ -28,8 +28,8 @@ func (s *ProbabilisticByCaseDuplication) Initialize(freqRatios []int) error {
 				Err:          ErrFreqRatioMustBeGreaterThanZero,
 			}
 		}
-		totalSum += freqRatio
 		s.origFreqRatios = append(s.origFreqRatios, freqRatio)
+		totalSum += freqRatio
 	}
 	s.selectedIndexes = make([]strategies.RankedIndex, 0, totalSum)
 	for i, freqRatio := range freqRatios {
@@ -95,10 +95,15 @@ func (s *ProbabilisticByCaseDuplication) EnableSelectCase(index int) {
 	}
 }
 
-func (s *ProbabilisticByCaseDuplication) InitializeCopy(freqRatios []int) (strategies.PrioritizationStrategy[int], error) {
-	res := NewProbabilisticByCaseDuplication()
-	if err := res.Initialize(freqRatios); err != nil {
-		return nil, err
+func (s *ProbabilisticByCaseDuplication) InitializeCopy() strategies.PrioritizationStrategy[int] {
+	if len(s.origFreqRatios) == 0 {
+		return nil
 	}
-	return res, nil
+	res := NewProbabilisticByCaseDuplication()
+	_ = res.Initialize(s.origFreqRatios)
+	return res
+}
+
+func (s *ProbabilisticByCaseDuplication) InitializeCopyAsDynamicSubStrategy() strategies.DynamicSubStrategy {
+	return strategies.InitializeCopyAsDynamicSubStrategy(s)
 }

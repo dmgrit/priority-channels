@@ -9,6 +9,7 @@ type WithStrictOrderAcrossCycles struct {
 	levels            collections.DoublyLinkedList[*aLevel]
 	origIndexToBucket map[int]*collections.ListNode[*aPriorityBucket]
 	disabledCases     map[int]int
+	origFreqRatios    []int
 }
 
 type aPriorityBucket struct {
@@ -30,6 +31,7 @@ func NewWithStrictOrderAcrossCycles() *WithStrictOrderAcrossCycles {
 }
 
 func (s *WithStrictOrderAcrossCycles) Initialize(freqRatios []int) error {
+	s.origFreqRatios = make([]int, 0, len(freqRatios))
 	zeroLevel := collections.NewListNode(&aLevel{})
 	for i, freqRatio := range freqRatios {
 		if freqRatio <= 0 {
@@ -38,6 +40,7 @@ func (s *WithStrictOrderAcrossCycles) Initialize(freqRatios []int) error {
 				Err:          ErrFreqRatioMustBeGreaterThanZero,
 			}
 		}
+		s.origFreqRatios = append(s.origFreqRatios, freqRatio)
 		bucket := &aPriorityBucket{
 			OrigChannelIndex: i,
 			Value:            0,
@@ -119,12 +122,17 @@ func (s *WithStrictOrderAcrossCycles) EnableSelectCase(index int) {
 	s.addBucketToLevel(bucketNode, firstLevel)
 }
 
-func (s *WithStrictOrderAcrossCycles) InitializeCopy(freqRatios []int) (strategies.PrioritizationStrategy[int], error) {
-	res := NewWithStrictOrderAcrossCycles()
-	if err := res.Initialize(freqRatios); err != nil {
-		return nil, err
+func (s *WithStrictOrderAcrossCycles) InitializeCopy() strategies.PrioritizationStrategy[int] {
+	if len(s.origFreqRatios) == 0 {
+		return nil
 	}
-	return res, nil
+	res := NewWithStrictOrderAcrossCycles()
+	_ = res.Initialize(s.origFreqRatios)
+	return res
+}
+
+func (s *WithStrictOrderAcrossCycles) InitializeCopyAsDynamicSubStrategy() strategies.DynamicSubStrategy {
+	return strategies.InitializeCopyAsDynamicSubStrategy(s)
 }
 
 func (s *WithStrictOrderAcrossCycles) updateStateOnReceivingMessageToBucket(bucket *collections.ListNode[*aPriorityBucket]) {

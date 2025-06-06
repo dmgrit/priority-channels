@@ -14,6 +14,7 @@ type WithStrictOrder struct {
 	origIndexToBucket map[int]*priorityBucket
 	disabledCases     map[int]int
 	fully             bool
+	origFreqRatios    []int
 }
 
 func NewWithStrictOrderAcrossCycles2() *WithStrictOrder {
@@ -38,6 +39,7 @@ func byFreqPriorityBucketsSortingFunc(b1, b2 *priorityBucket) bool {
 }
 
 func (s *WithStrictOrder) Initialize(freqRatios []int) error {
+	s.origFreqRatios = make([]int, 0, len(freqRatios))
 	zeroLevel := &level{}
 	zeroLevel.Buckets = make([]*priorityBucket, 0, len(freqRatios))
 	for i, freqRatio := range freqRatios {
@@ -47,6 +49,7 @@ func (s *WithStrictOrder) Initialize(freqRatios []int) error {
 				Err:          ErrFreqRatioMustBeGreaterThanZero,
 			}
 		}
+		s.origFreqRatios = append(s.origFreqRatios, freqRatio)
 		bucket := &priorityBucket{
 			OrigChannelIndex: i,
 			Value:            0,
@@ -163,12 +166,17 @@ func (s *WithStrictOrder) EnableSelectCase(index int) {
 	s.addBucketToLevel(bucket, 0)
 }
 
-func (s *WithStrictOrder) InitializeCopy(freqRatios []int) (strategies.PrioritizationStrategy[int], error) {
-	res := NewWithStrictOrderFully()
-	if err := res.Initialize(freqRatios); err != nil {
-		return nil, err
+func (s *WithStrictOrder) InitializeCopy() strategies.PrioritizationStrategy[int] {
+	if len(s.origFreqRatios) == 0 {
+		return nil
 	}
-	return res, nil
+	res := NewWithStrictOrderFully()
+	_ = res.Initialize(s.origFreqRatios)
+	return res
+}
+
+func (s *WithStrictOrder) InitializeCopyAsDynamicSubStrategy() strategies.DynamicSubStrategy {
+	return strategies.InitializeCopyAsDynamicSubStrategy(s)
 }
 
 type priorityBucket struct {

@@ -208,7 +208,6 @@ func (c *compositeChannelByPrioritization[T, W]) Clone() selectable.Channel[T] {
 		res.channels = append(res.channels, ch.CloneChannelWithWeight())
 		weights = append(weights, ch.Weight())
 	}
-	strategyInterface, _ := c.strategy.InitializeCopy(weights)
-	res.strategy = strategyInterface
+	res.strategy = c.strategy.InitializeCopy()
 	return res
 }
