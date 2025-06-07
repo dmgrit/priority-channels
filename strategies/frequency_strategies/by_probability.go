@@ -244,8 +244,8 @@ func (s *ByProbabilityFromFreqRatios) Initialize(freqRatios []int) error {
 	return nil
 }
 
-func (s *ByProbability) ByProbabilityFromFreqRatios(freqRatios []interface{}) error {
-	freqRatiosInt, err := strategies.ConvertWeightsWithTypeAssertion[float64]("frequency ratio", freqRatios)
+func (s *ByProbabilityFromFreqRatios) InitializeWithTypeAssertion(freqRatios []interface{}) error {
+	freqRatiosInt, err := strategies.ConvertWeightsWithTypeAssertion[int]("frequency ratio", freqRatios)
 	if err != nil {
 		return err
 	}
