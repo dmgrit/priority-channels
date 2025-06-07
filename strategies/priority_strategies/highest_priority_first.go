@@ -16,6 +16,7 @@ type HighestAlwaysFirst struct {
 	totalSortedPriorities      int
 	disabledCases              map[int]sortedToOriginalIndex
 	frequencyStrategyGenerator FrequencyStrategyGenerator
+	initialized                bool
 }
 
 type sortedToOriginalIndex struct {
@@ -166,6 +167,7 @@ func (s *HighestAlwaysFirst) Initialize(priorities []int) error {
 	if err := s.shrinkSamePrioritiesRanges(); err != nil {
 		return err
 	}
+	s.initialized = true
 	return nil
 }
 
@@ -305,7 +307,7 @@ func (s *HighestAlwaysFirst) getSortedIndexByOriginalIndex(index int) int {
 }
 
 func (s *HighestAlwaysFirst) InitializeCopy() strategies.PrioritizationStrategy[int] {
-	if len(s.origPriorities) == 0 {
+	if !s.initialized {
 		return nil
 	}
 	res := NewByHighestAlwaysFirst()

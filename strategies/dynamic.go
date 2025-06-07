@@ -43,6 +43,7 @@ type DynamicByPreconfiguredStrategies struct {
 	strategiesByName        map[string]DynamicSubStrategy
 	currentStrategyName     string
 	currentStrategySelector func() string
+	initialized             bool
 }
 
 func NewDynamicByPreconfiguredStrategies(
@@ -72,10 +73,14 @@ func (s *DynamicByPreconfiguredStrategies) Initialize(weights []map[string]inter
 		}
 	}
 	s.currentStrategyName = s.currentStrategySelector()
+	s.initialized = true
 	return nil
 }
 
 func (s *DynamicByPreconfiguredStrategies) InitializeCopy() PrioritizationStrategy[map[string]interface{}] {
+	if !s.initialized {
+		return nil
+	}
 	copyStrategies := make(map[string]DynamicSubStrategy, len(s.strategiesByName))
 	for name, strategy := range s.strategiesByName {
 		copyStrategies[name] = strategy.InitializeCopyAsDynamicSubStrategy()

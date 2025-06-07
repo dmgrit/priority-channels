@@ -10,6 +10,7 @@ type ProbabilisticByCaseDuplication struct {
 	disabledCases   map[int]int
 	selectedIndexes []strategies.RankedIndex
 	origFreqRatios  []int
+	initialized     bool
 }
 
 func NewProbabilisticByCaseDuplication() *ProbabilisticByCaseDuplication {
@@ -40,6 +41,7 @@ func (s *ProbabilisticByCaseDuplication) Initialize(freqRatios []int) error {
 			})
 		}
 	}
+	s.initialized = true
 	return nil
 }
 
@@ -96,7 +98,7 @@ func (s *ProbabilisticByCaseDuplication) EnableSelectCase(index int) {
 }
 
 func (s *ProbabilisticByCaseDuplication) InitializeCopy() strategies.PrioritizationStrategy[int] {
-	if len(s.origFreqRatios) == 0 {
+	if !s.initialized {
 		return nil
 	}
 	res := NewProbabilisticByCaseDuplication()

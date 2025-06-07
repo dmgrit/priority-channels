@@ -15,6 +15,7 @@ type WithStrictOrder struct {
 	disabledCases     map[int]int
 	fully             bool
 	origFreqRatios    []int
+	initialized       bool
 }
 
 func NewWithStrictOrderAcrossCycles2() *WithStrictOrder {
@@ -63,6 +64,7 @@ func (s *WithStrictOrder) Initialize(freqRatios []int) error {
 	})
 
 	s.levels = []*level{zeroLevel}
+	s.initialized = true
 	return nil
 }
 
@@ -167,7 +169,7 @@ func (s *WithStrictOrder) EnableSelectCase(index int) {
 }
 
 func (s *WithStrictOrder) InitializeCopy() strategies.PrioritizationStrategy[int] {
-	if len(s.origFreqRatios) == 0 {
+	if !s.initialized {
 		return nil
 	}
 	res := NewWithStrictOrderFully()

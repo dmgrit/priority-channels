@@ -10,6 +10,7 @@ type WithStrictOrderAcrossCycles struct {
 	origIndexToBucket map[int]*collections.ListNode[*aPriorityBucket]
 	disabledCases     map[int]int
 	origFreqRatios    []int
+	initialized       bool
 }
 
 type aPriorityBucket struct {
@@ -52,6 +53,7 @@ func (s *WithStrictOrderAcrossCycles) Initialize(freqRatios []int) error {
 		zeroLevel.Value().Buckets.Append(bucketNode)
 	}
 	s.levels.Append(zeroLevel)
+	s.initialized = true
 	return nil
 }
 
@@ -123,7 +125,7 @@ func (s *WithStrictOrderAcrossCycles) EnableSelectCase(index int) {
 }
 
 func (s *WithStrictOrderAcrossCycles) InitializeCopy() strategies.PrioritizationStrategy[int] {
-	if len(s.origFreqRatios) == 0 {
+	if !s.initialized {
 		return nil
 	}
 	res := NewWithStrictOrderAcrossCycles()

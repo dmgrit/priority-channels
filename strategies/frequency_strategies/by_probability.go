@@ -19,6 +19,7 @@ type ByProbability struct {
 	currSelectedIndexes           []int
 	origProbabilities             []float64
 	disabledCases                 map[int]float64
+	initialized                   bool
 }
 
 type probabilitySelection struct {
@@ -72,6 +73,7 @@ func (s *ByProbability) Initialize(probabilities []float64) error {
 	for _, p := range s.pendingProbabilities {
 		s.pendingProbabilitiesInitState = append(s.pendingProbabilitiesInitState, p)
 	}
+	s.initialized = true
 	return nil
 }
 
@@ -186,7 +188,7 @@ func (s *ByProbability) readjustSortedProbabilitySelectionsList(list []probabili
 }
 
 func (s *ByProbability) InitializeCopy() strategies.PrioritizationStrategy[float64] {
-	if len(s.origProbabilities) == 0 {
+	if !s.initialized {
 		return nil
 	}
 	res := NewByProbability()
@@ -200,6 +202,7 @@ func (s *ByProbability) InitializeCopyAsDynamicSubStrategy() strategies.DynamicS
 
 type ByProbabilityFromFreqRatios struct {
 	origFreqRatios []int
+	initialized    bool
 	*ByProbability
 }
 
@@ -234,7 +237,11 @@ func (s *ByProbabilityFromFreqRatios) Initialize(freqRatios []int) error {
 		}
 		probabilitiesFloat64 = append(probabilitiesFloat64, prob)
 	}
-	return s.ByProbability.Initialize(probabilitiesFloat64)
+	if err := s.ByProbability.Initialize(probabilitiesFloat64); err != nil {
+		return err
+	}
+	s.initialized = true
+	return nil
 }
 
 func (s *ByProbability) ByProbabilityFromFreqRatios(freqRatios []interface{}) error {
@@ -246,7 +253,7 @@ func (s *ByProbability) ByProbabilityFromFreqRatios(freqRatios []interface{}) er
 }
 
 func (s *ByProbabilityFromFreqRatios) InitializeCopy() strategies.PrioritizationStrategy[int] {
-	if len(s.origFreqRatios) == 0 {
+	if !s.initialized {
 		return nil
 	}
 	res := NewByProbabilityFromFreqRatios()
