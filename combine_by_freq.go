@@ -13,7 +13,7 @@ func CombineByFrequencyRatio[T any](ctx context.Context,
 	for _, option := range options {
 		option(pcOptions)
 	}
-	channels, channelsWeights := toSelectableChannelsWithWeightByFreqRatio(priorityChannelsWithFreqRatio)
+	channels, channelsWeights := toSelectableChannelsWithWeightByFreqRatio(priorityChannelsWithFreqRatio, pcOptions.combineWithoutClone)
 	sumFreqRatios := 0
 	for _, c := range priorityChannelsWithFreqRatio {
 		sumFreqRatios += c.FreqRatio()
@@ -52,11 +52,16 @@ func NewPriorityChannelWithFreqRatio[T any](name string, priorityChannel *Priori
 }
 
 func toSelectableChannelsWithWeightByFreqRatio[T any](
-	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T]) ([]selectable.Channel[T], []int) {
+	priorityChannelsWithFreqRatio []PriorityChannelWithFreqRatio[T], noClone bool) ([]selectable.Channel[T], []int) {
 	res := make([]selectable.Channel[T], 0, len(priorityChannelsWithFreqRatio))
 	resWeights := make([]int, 0, len(priorityChannelsWithFreqRatio))
 	for _, c := range priorityChannelsWithFreqRatio {
-		priorityChannel := c.PriorityChannel().clone()
+		var priorityChannel *PriorityChannel[T]
+		if noClone {
+			priorityChannel = c.PriorityChannel()
+		} else {
+			priorityChannel = c.PriorityChannel().clone()
+		}
 		res = append(res, asSelectableChannelWithName(priorityChannel, c.Name()))
 		resWeights = append(resWeights, c.FreqRatio())
 	}

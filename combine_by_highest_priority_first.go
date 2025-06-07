@@ -14,7 +14,7 @@ func CombineByHighestAlwaysFirst[T any](ctx context.Context,
 	for _, option := range options {
 		option(pcOptions)
 	}
-	channels, channelsWeights := toSelectableChannelsWithWeightByPriority[T](priorityChannelsWithPriority)
+	channels, channelsWeights := toSelectableChannelsWithWeightByPriority[T](priorityChannelsWithPriority, pcOptions.combineWithoutClone)
 	_, err := getFrequencyStrategy(levelCombine, pcOptions.frequencyMode, pcOptions.frequencyMethod, len(channels))
 	if err != nil {
 		return nil, err
@@ -53,11 +53,16 @@ func NewPriorityChannelWithPriority[T any](name string, priorityChannel *Priorit
 }
 
 func toSelectableChannelsWithWeightByPriority[T any](
-	priorityChannelsWithPriority []PriorityChannelWithPriority[T]) ([]selectable.Channel[T], []int) {
+	priorityChannelsWithPriority []PriorityChannelWithPriority[T], noClone bool) ([]selectable.Channel[T], []int) {
 	res := make([]selectable.Channel[T], 0, len(priorityChannelsWithPriority))
 	resWeights := make([]int, 0, len(priorityChannelsWithPriority))
 	for _, c := range priorityChannelsWithPriority {
-		priorityChannel := c.PriorityChannel().clone()
+		var priorityChannel *PriorityChannel[T]
+		if noClone {
+			priorityChannel = c.PriorityChannel()
+		} else {
+			priorityChannel = c.PriorityChannel().clone()
+		}
 		res = append(res, asSelectableChannelWithName(priorityChannel, c.Name()))
 		resWeights = append(resWeights, c.Priority())
 	}

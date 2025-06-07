@@ -11,7 +11,11 @@ func CombineByStrategy[T any, W any](ctx context.Context,
 	strategy strategies.PrioritizationStrategy[W],
 	priorityChannelsWithWeight []PriorityChannelWithWeight[T, W],
 	options ...func(*PriorityChannelOptions)) (*PriorityChannel[T], error) {
-	channels, channelsWeights := toSelectableChannelsWithWeight[T](priorityChannelsWithWeight)
+	pcOptions := &PriorityChannelOptions{}
+	for _, option := range options {
+		option(pcOptions)
+	}
+	channels, channelsWeights := toSelectableChannelsWithWeight[T](priorityChannelsWithWeight, pcOptions.combineWithoutClone)
 	return newByStrategy(ctx, strategy, channels, channelsWeights, options...)
 }
 
@@ -42,11 +46,16 @@ func NewPriorityChannelWithWeight[T any, W any](name string, priorityChannel *Pr
 }
 
 func toSelectableChannelsWithWeight[T any, W any](
-	priorityChannelsWithWeight []PriorityChannelWithWeight[T, W]) ([]selectable.Channel[T], []W) {
+	priorityChannelsWithWeight []PriorityChannelWithWeight[T, W], noClone bool) ([]selectable.Channel[T], []W) {
 	res := make([]selectable.Channel[T], 0, len(priorityChannelsWithWeight))
 	resWeights := make([]W, 0, len(priorityChannelsWithWeight))
 	for _, c := range priorityChannelsWithWeight {
-		priorityChannel := c.PriorityChannel().clone()
+		var priorityChannel *PriorityChannel[T]
+		if noClone {
+			priorityChannel = c.PriorityChannel()
+		} else {
+			priorityChannel = c.PriorityChannel().clone()
+		}
 		res = append(res, asSelectableChannelWithName(priorityChannel, c.Name()))
 		resWeights = append(resWeights, c.Weight())
 	}

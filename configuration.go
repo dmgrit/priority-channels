@@ -107,6 +107,7 @@ func newFromPriorityChannelConfig[T any](
 	channelNameToChannel map[string]<-chan T,
 	innerPriorityChannelsContexts map[string]context.Context) (*PriorityChannel[T], error) {
 	var options []func(*PriorityChannelOptions)
+	options = append(options, combineWithoutClone())
 	if config.AutoDisableClosedChannels {
 		options = append(options, AutoDisableClosedChannels())
 	}
